@@ -115,5 +115,30 @@ time, GPU gaps, padding, warm-up time, graph memory, and end-to-end goodput. A
 graph mode has succeeded only if it improves the service after its full cost is
 included.
 
+## Worked example: bucket 9 is really bucket 16
+
+Suppose captured decode buckets are 1, 4, 8, 16, and 32. A batch of nine replays
+the 16 bucket and executes seven padded slots. At batch eight, graph replay
+reduces CPU launch work from 1.1 to 0.2 ms while adding 0.15 ms of dispatch and
+padding; a 5.1 ms step becomes 4.35 ms. At batch nine, the extra padded GPU work
+may be large enough to lose.
+
+Record requested shape, replayed bucket, padding ratio, fallback, and artifact
+identity on every step. A histogram of requested batch sizes tells you whether
+to add a bucket or accept eager execution for a rare gap. Compilation time is a
+startup measurement, not something to hide inside or silently exclude from a
+steady-state number.
+
+## Practice: design the bucket set
+
+Use the batch distribution `1: 8%, 2–4: 17%, 5–8: 31%, 9–16: 29%, 17–32: 15%`.
+Compare eager, compiled eager, and graph replay with buckets 1, 4, 8, 16, and
+32. Report cold start, CPU time, GPU gaps, padding, fallbacks, graph memory, and
+goodput.
+
+Propose one bucket change under a fixed graph-memory budget and explain which
+traffic it helps. The worked analysis is in
+[Appendix G](../appendices/g-worked-solutions.md#9-compilation-and-graph-buckets).
+
 Compilation changes how operations run. Quantization, the subject of Chapter
 10, changes the representation of the values they process.

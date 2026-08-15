@@ -161,18 +161,34 @@ power or network boundary do not provide the independence their count suggests.
 A remote cache can improve warm-start performance and become a shared failure
 dependency at the same time.
 
-## Predict before you profile
+## Worked example: place before measuring
 
-Choose one real node or cluster. Record its device memory, numerical formats,
-peer links, CPU sockets, NICs, and storage paths. Estimate the model's parameter
-and per-request state bytes. Then estimate communication for the intended
-parallel plan.
+Place the dense model from Chapter 3 on two eight-GPU nodes with 80 GiB per GPU.
+Fast links connect devices inside each node; the inter-node path is slower. A
+four-way tensor-parallel replica holds about 35 GB of weights per rank before
+overhead, and each rank holds roughly one quarter of the KV state.
 
-Before running a profiler, predict the bottleneck for three cases: a long
-prefill, a small-batch decode, and a KV-cache transfer. When the measurements
-disagree, investigate the gap. It may reveal a hidden copy, an inefficient
-shape, a host synchronization, a network path you did not expect, or a mistaken
-traffic estimate.
+Keep every four-rank group inside one fast-link island. Striping alternating
+ranks across nodes changes no model arithmetic but moves layer-frequency
+collectives onto the slower network. That is a topology error visible before a
+profiler runs.
+
+Predict long prefill to stress compute and attention traffic, batch-1 decode to
+stress device-memory bandwidth and collective latency, and a 2.44-GiB KV move
+to follow the slowest staging or network edge. The profiler's job is to falsify
+those claims. Large CPU gaps during decode, for example, would reveal a host or
+launch bottleneck the prediction omitted.
+
+## Practice: write a falsifiable hardware prediction
+
+Draw both nodes through GPU links, CPU sockets, NICs, and the connecting switch.
+Place two four-way replicas, calculate per-rank weight and 8,000-token KV bytes,
+and mark every collective and state-transfer path.
+
+Predict the limiting resource for long prefill, batch-1 decode, and remote KV
+load. For each prediction, name a counter or timeline observation that would
+prove it wrong. Compare with
+[Appendix G](../appendices/g-worked-solutions.md#4-topology-prediction).
 
 That habit—predict, measure, explain—will be more useful than memorizing any
 hardware table. Part II now follows a request through the software that turns

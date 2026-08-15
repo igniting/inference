@@ -194,21 +194,34 @@ The record prevents a common reversal: choosing a model in isolation and later
 discovering that the service contract cannot afford it. Model and system
 selection are one decision viewed at two levels.
 
-## Build three revealing traces
+## Worked example: throughput without goodput
 
-Create three traces with the same total number of input and output tokens. In
-the first, space short requests evenly. In the second, send mixed-length
-requests in bursts. In the third, model conversations that share a long prefix
-and pause between turns.
+One hundred requests arrive over 12.5 seconds. The server completes 96, so its
+request throughput is 7.68 requests per second. Only 81 begin within 600 ms,
+avoid token gaps above 150 ms, finish successfully, and return valid output.
+Goodput is therefore 6.48 requests per second.
 
-Run each at the same average arrival rate. Measure queue time, TTFT, ITL,
-end-to-end latency, throughput, cache reuse, errors, and goodput. Then repeat
-with a closed-loop generator.
+Removing the fifteen slow-but-completed requests from the latency sample would
+make the percentile look better and destroy the meaning of the SLO. They must
+remain completed work that failed to qualify. The four requests that errored or
+timed out also remain in the workload accounting.
 
-The token totals are identical, but the service should behave differently. The
-experiment makes the central point of this chapter tangible: performance is a
-relationship between a system and a workload, not a permanent property of a
-model server.
+Now keep total tokens fixed but move arrivals into five bursts. Arithmetic work
+is unchanged, yet queues and long-prefill interference can reduce goodput. This
+is why the arrival process and length correlations belong in the workload
+definition.
+
+## Practice: construct comparable traces
+
+Create three 100-request traces, each containing 100,000 input and 20,000 output
+tokens: evenly spaced uniform requests, five bursts with mixed lengths, and ten
+conversation groups sharing 8,000-token prefixes. Use an open-loop rate of 8
+requests/s, then repeat closed-loop.
+
+Report queue time, TTFT, worst per-request ITL, end-to-end latency, prefix
+matches, errors, throughput, and the SLO-qualified goodput defined above.
+Explain why equal token totals do not imply equal capacity. See the worked
+construction in [Appendix G](../appendices/g-worked-solutions.md#2-workload-traces-and-goodput).
 
 Now that the goals are clear, the next chapter looks inside the model to find
 the computation and state that the server must schedule.

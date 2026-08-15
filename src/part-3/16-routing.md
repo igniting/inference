@@ -115,16 +115,27 @@ idempotent or safely abandoned. The router should open a circuit around a
 failing destination rather than continuing to discover the same failure per
 request.
 
-## Simulate locality under load
+## Worked example: partial locality wins
 
-Create a router simulator with several replicas, skewed prefix popularity, and
-bursty arrivals. Give each replica a local scheduler and finite cache. Compare
-round robin, least estimated work, cache-only routing, and a hybrid cost model.
+R0 has all 4,000 reusable tokens and 300 ms of queue. R1 is idle with no match.
+R2 has 2,000 matched tokens and 100 ms of queue. If recomputation costs 0.06 ms
+per missing token, estimated placement costs are 300, 240, and 220 ms. R2 wins.
 
-Plot goodput, queue percentiles, recomputed tokens, cache occupancy, and traffic
-imbalance. Increase the popularity of one prefix until cache-only routing loses
-to recomputation on idle replicas. Then allow replication of the hot prefix and
-measure the capacity it consumes.
+Cache-only routing chooses R0; least-queue chooses R1. A hybrid cost makes its
+assumptions visible and can add transfer, adapter load, stale-telemetry risk,
+and deadline penalty. It remains a prediction, so the worker reports the actual
+queue and match observed at admission.
+
+## Practice: simulate a hot prefix
+
+Implement the three-replica case, then add bursty arrivals, delayed telemetry,
+finite caches, and one increasingly popular prefix. Compare round robin,
+least-work, cache-only, and the hybrid estimate.
+
+Plot goodput, queue percentiles, recomputed tokens, occupancy, and imbalance.
+Find when replication of the hot prefix repays its memory and add hysteresis to
+prevent oscillation. The worked decision is in
+[Appendix G](../appendices/g-worked-solutions.md#16-cache-aware-routing).
 
 The simulation completes the path from one request to a distributed text
 service. Part IV applies the same ideas to models whose serving loops are not

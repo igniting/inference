@@ -141,18 +141,33 @@ and the cache coordinator. SGLang has separate memory-pool and radix-cache paths
 for sliding-window, Mamba, and unified layouts. The names will change; the
 underlying requirement comes from the model.
 
-## Test correctness before celebrating reuse
+## Worked example: publication before reuse
 
-Create pairs of requests that differ in exactly one way: one token, adapter,
-image, position, model version, tenant namespace, or state format. Verify which
-prefixes may legally match.
+A request produces a final partial block and is cancelled while the GPU write
+is still in flight. Making that block immediately visible creates two hazards:
+a reader can observe incomplete data, and cleanup can reallocate an address the
+GPU still uses.
 
-Then cancel a request during an in-flight write, branch from a partial block,
-and force eviction under mixed prefix sizes. Assert that outputs remain
-equivalent, references return to zero, and blocks eventually become reusable.
+Keep the block private and pinned until the completion event. Then either seal
+and publish it under the cache policy or discard it. A branch shares sealed
+full blocks but copies a partial tail before writing. Eviction removes lookup
+visibility first and frees storage only after references reach zero.
 
-A cache can be fast and wrong. The tests that reject invalid reuse are at least
-as important as the benchmark that reports a hit.
+Content identity also needs a boundary. If token 511 changes, at most the first
+511 tokens match. A different adapter or model version invalidates the produced
+state even when token IDs are identical. Tenant policy may forbid otherwise
+valid cross-tenant reuse.
+
+## Practice: construct a cache safety matrix
+
+Starting from one 512-token prefix, vary exactly one of token content, adapter,
+image feature, position scheme, model version, tenant, and physical block
+layout. State the legal reusable prefix and why.
+
+Then test cancellation during a write, branching from a partial block, and
+eviction with a live reader. Assert unpublished-state isolation, copy-on-write,
+eventual reference release, and output equivalence with caching disabled. The
+worked matrix is in [Appendix G](../appendices/g-worked-solutions.md#7-kv-cache-correctness-matrix).
 
 With memory organized, the engine can present irregular batches to the GPU.
 Chapter 8 looks at the kernels that turn those mappings into useful work.

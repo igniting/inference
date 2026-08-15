@@ -117,17 +117,27 @@ can bottleneck several GPUs. Measure dispatch and combine by source, destination
 message size, and layer. Aggregate network bandwidth can look healthy while one
 rail determines step time.
 
-## Build an expert trace
+## Worked example: balance the busiest rank
 
-Collect router outputs for representative prompts without storing user content.
-For each layer and step, record token counts per expert and rank. Replay the
-trace through candidate placements and estimate dispatch bytes, busiest-rank
-work, and redundant-expert memory.
+An eight-expert layer routes 64 tokens with counts `22, 14, 7, 6, 5, 4, 3, 3`.
+With two contiguous experts per rank, rank 0 receives 36 assignments while rank
+3 receives six. Moving the second-hot expert away can reduce the maximum rank
+load even if average utilization barely changes.
 
-Then compare the estimate with engine timelines. Test prefill and decode
-separately. Include the cost and safety of an EPLB update. The goal is not
-perfect balance; it is lower goodput cost after communication and movement are
-included.
+At hidden width 8,192 and BF16, each routed activation is 16 KiB. Top-2 routing
+creates 128 assignments for 64 input tokens—roughly 2 MiB before protocol
+overhead in each dispatch/combine direction. A placement that balances compute
+but increases slow-link traffic can still lose.
+
+## Practice: replay and update a placement
+
+Replay the counts above on four ranks with two experts each. Propose a new
+placement, calculate per-rank assignments and activation payload, and predict
+the straggler. Then design a generation-safe EPLB update that cannot mix old
+and new mappings within a batch.
+
+Compare prefill and decode traces and include weight-movement cost. The worked
+placement is in [Appendix G](../appendices/g-worked-solutions.md#13-expert-trace-and-placement).
 
 Expert serving makes phase differences especially pronounced. Chapter 14
 generalizes the idea of assigning different stages to different worker pools.

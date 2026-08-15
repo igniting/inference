@@ -126,15 +126,28 @@ Use conditional language:
 
 This result is more durable than a framework ranking.
 
-## Write a benchmark card
+## Worked example: make the claim falsifiable
 
-Before accepting any performance claim in this book, another engineer should be
-able to find the command, configuration, environment, workload trace, raw
-results, analysis, and quality checks.
+“Configuration B is 18 percent faster” is not a benchmark claim. A useful claim
+states that B improves TTFT-qualified goodput for the Atlas document trace,
+under an open-loop arrival process, while passing the same quality gate. It
+pins the model, engine commit, container, hardware topology, workload hash,
+warm-up, cache state, error accounting, and analysis.
 
-Reproduce one experiment on a second day or host. If it changes, do not average
-away the discrepancy. Find the uncontrolled variable. That investigation is
-performance engineering.
+Run baseline and candidate in randomized order at several offered loads. Keep
+timeouts and errors in the denominator. If a second-day result moves, inspect
+temperature, clock policy, cache warmth, artifact hashes, and background
+traffic rather than averaging two regimes into one misleading number.
+
+## Practice: complete a benchmark card
+
+Write the full card for a candidate scheduler that claims higher goodput on the
+traces from Chapter 2. Include commands, configuration, system identity,
+quality checks, repetitions, raw event schema, analysis revision, and second-
+day reproduction procedure.
+
+State the exact claim the evidence could falsify. A complete example appears in
+[Appendix G](../appendices/g-worked-solutions.md#22-benchmark-card).
 
 Once a service is deployed, the experiment continues under real traffic.
 Chapter 23 covers the signals and operating practices that keep it interpretable.

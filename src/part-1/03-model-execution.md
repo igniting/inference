@@ -180,10 +180,34 @@ layer, distributed by expert, or separated into encoder, prefill, and decode
 pools. All may be legal. The workload, hardware links, memory capacity, and SLO
 decide which is useful.
 
-Before choosing an engine configuration, take one dense decoder, one MoE
-decoder, and one hybrid model. Estimate parameter bytes, persistent state per
-token, prefill and decode shapes, conditional communication, and separately
-placeable stages. This exercise turns model names into the work a serving
-system must actually perform.
+## Worked example: inventory a dense decoder
+
+Consider a BF16 dense decoder with 70 billion parameters, 80 layers, 8 KV
+heads, and head dimension 128. Its parameter storage is roughly 140 GB before
+runtime overhead. Using the cache formula from this chapter, each token creates
+320 KiB of KV state across the model. An 8,000-token sequence therefore needs
+about 2.44 GiB.
+
+Those two numbers immediately constrain serving. The weights do not fit on one
+80-GiB device at BF16. Long active contexts can consume substantial memory even
+after the weights are sharded. Prefill creates many token positions at once;
+decode repeatedly reads the sharded weights and existing state for one new
+position per sequence.
+
+The same inventory for an MoE model must separate total resident expert weights
+from experts active per token. For a vision-language model it must separate the
+encoder, projected media features, and decoder KV state. Different inventories
+lead to different legal placement plans.
+
+## Practice: compare three model topologies
+
+Inventory the dense decoder above, an 8 × 7B expert model with two experts
+active per token, and a vision-language model that produces 2,048 feature
+tokens per image. For each, list parameter bytes, persistent state, prefill and
+decode shapes, conditional communication, and independently placeable stages.
+
+Do not choose an engine setting yet. Produce the facts a serving plan must
+respect. The worked inventory is in
+[Appendix G](../appendices/g-worked-solutions.md#3-model-topology-inventory).
 
 The next chapter maps that work onto real memory and interconnects.

@@ -12,6 +12,10 @@ create-missing = false
 git-repository-url = "https://github.com/igniting/inference"
 edit-url-template = "https://github.com/igniting/inference/edit/main/{path}"
 site-url = "/inference/"
+additional-css = ["theme/inference.css"]
+default-theme = "light"
+preferred-dark-theme = "navy"
+no-section-label = true
 
 [output.html.search]
 enable = true

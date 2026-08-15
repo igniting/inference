@@ -112,17 +112,29 @@ collective calls, cache control, or profiling—on the public inference network.
 They can change model behavior or deny service. Separate credentials and
 network boundaries are appropriate.
 
-## Build a protocol conformance suite
+## Worked example: disconnect is a state transition
 
-Create golden tests for tokenization, chat templates, streaming order, stop
-conditions, log probabilities, usage, structured output, tool calls,
-cancellation, errors, and retries. Run the same suite against every engine
-upgrade.
+A slow client fills its bounded output buffer. The server pauses or cancels
+that stream without blocking the shared output path. When the connection
+closes, the request enters `cancelling`; future model steps stop, in-flight
+output is ignored, and KV references eventually return to the baseline count.
 
-Include a slow consumer and a disconnect halfway through generation. Confirm
-that backpressure does not block unrelated requests and that GPU state is
-eventually released. Send duplicate request IDs and verify the documented
-behavior.
+Duplicate request ID `r-17` also needs a contract. Atlas rejects a second live
+attempt. A completed idempotent request may return its recorded terminal result
+for a retention window. Tool execution uses a separate idempotency key because
+regenerating text and repeating an external action are different operations.
+
+## Practice: build a semantic conformance suite
+
+Pin a tokenizer and chat template, then test streamed and non-streamed results,
+stop conditions, log probabilities, usage, schemas, tool calls, errors, and
+cancellation. Add a slow consumer, mid-generation disconnect, duplicate live
+ID, and retry after completion.
+
+Assert semantic output, event ordering, bounded backpressure, and eventual GPU
+state release. Classify engine-version differences instead of checking only
+HTTP status. The worked contract is in
+[Appendix G](../appendices/g-worked-solutions.md#21-protocol-conformance).
 
 The suite lets the engine change internally without moving the correctness
 boundary. Chapter 22 applies the same discipline to performance claims.

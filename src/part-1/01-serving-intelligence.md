@@ -169,16 +169,36 @@ and SGLang's
 These links point to the exact snapshots studied for this book. They are
 examples of current design, not permanent APIs.
 
-## Your first system trace
+## Worked example: the cache hit that loses
 
-Choose one request your service supports and draw its path from arrival to
-final output. Include every queue, process boundary, network transfer, and
-state owner. Mark where cancellation can arrive.
+Suppose a 6,000-token document question reaches a router. Replica A already has
+4,000 tokens of the document cached but has 450 ms of queued prefill work.
+Replica B is idle and can recompute those 4,000 tokens in 280 ms. A router that
+sees only cache locality sends the request to A and adds at least 170 ms to the
+user's wait.
 
-Then look for the least visible delay. Is it the request queue? Tokenization?
-Waiting for a cache transfer? Output processing? The goal is not to produce a
-beautiful architecture diagram. It is to find the place where the user's time
-and the system's state actually go.
+The useful trace is not merely `router -> worker`. It records the router's
+queue estimate, matched-token estimate, decision time, and the worker that
+became authoritative. At the worker it separates admission wait, allocation,
+prefill, decode, and output buffering. The request record and KV blocks have
+different owners; cancellation must reach both without freeing blocks that a
+GPU still uses.
+
+This example gives the trace a purpose: explain why the apparently valuable
+cache hit made the service slower. Chapter 2 will turn that observation into a
+goodput and latency comparison.
+
+## Practice: produce an ownership trace
+
+Trace a 6,000-token document request with a 300-token output limit through edge
+queue, validation, tokenization, routing, engine admission, prefix lookup,
+prefill, decode, detokenization, and streaming. For every boundary, record the
+queue, state owner, cancellation behavior, and one timestamp.
+
+Then compare a replica with a 4,000-token match and 450 ms queue against an idle
+replica that recomputes the prefix in 280 ms. State which replica you choose and
+which two metrics would reveal a wrong choice in production. A worked answer is
+in [Appendix G](../appendices/g-worked-solutions.md#1-request-trace).
 
 In the next chapter, we will give those observations precise names and turn
 “fast” into a service objective that can be measured.

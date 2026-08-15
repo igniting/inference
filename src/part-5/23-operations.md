@@ -145,10 +145,28 @@ Each step should name the metric or trace, expected range, safe action, and
 rollback. Avoid instructions that say “restart the service” without identifying
 which state will be lost.
 
-Build a dashboard and failure drill for the architecture you designed in
-Chapter 14. Then ask an engineer who did not build it to diagnose the injected
-fault. Their questions reveal missing telemetry better than the original
-author's familiarity.
+## Worked example: high TTFT, low GPU use
+
+p95 TTFT rises from 480 ms to 1.4 seconds while GPU utilization falls from 72
+to 38 percent. The combination argues against “add more GPU compute” as the
+first response. Check ingress and tokenizer queue age, then engine admission
+reasons, remote-cache waits, graph compilation or fallback, and worker
+readiness. Each branch needs a confirming signal and reversible action.
+
+If delayed KV transfers are the cause, bound the wait and choose conditional
+recomputation or rejection. Restarting workers first may destroy state and the
+evidence while leaving the dependency failure untouched.
+
+## Practice: write and test the runbook
+
+Build a dashboard for the Chapter 14 pipeline and inject 500 ms into KV
+transfers. Write the high-TTFT/low-utilization runbook with expected metric
+ranges, safe actions, and rollback at every branch.
+
+Measure detection, user impact, cancellation cleanup, recomputation, leaked
+blocks, and recovery. Give the runbook to an engineer who did not build the
+system. The worked branch structure is in
+[Appendix G](../appendices/g-worked-solutions.md#23-operations-runbook).
 
 The final chapter brings the technical choices together with cost, security,
 and organizational ownership.

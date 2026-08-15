@@ -152,10 +152,28 @@ communication due to state.
 Finally, measure the plan at several batch shapes. Parallel efficiency is not a
 fixed property of the model.
 
-For an exercise, design two legal plans for the same model and cluster. Draw
-their rank meshes and physical mappings. Calculate the messages on each link
-for one prefill and one decode step. Predict which plan wins in each phase
-before running it.
+## Worked example: TP8 or PP2 × TP4
+
+On one fast eight-GPU island, Plan A uses tensor parallel size eight. Plan B
+uses two pipeline stages, each with tensor parallel size four. TP8 avoids a
+pipeline bubble but performs layer-frequency collectives across the widest
+group. PP2 × TP4 confines those collectives to four ranks and sends activations
+once across the stage boundary; it needs concurrency to keep both stages busy.
+
+For hidden width 8,192 in BF16, the stage-boundary activation is about 16 KiB
+per sequence token before batching. Tensor-parallel message volume depends on
+the exact sharding and collective algorithm, so derive it from the execution
+plan rather than copying a generic formula.
+
+## Practice: compare two legal meshes
+
+Draw both rank meshes and map them to physical links. For batch 16, calculate
+the stage-boundary payload and derive the chosen TP collective messages for one
+prefill and decode step. Predict phase winners at low and high concurrency.
+
+Include memory fit, collective latency, pipeline bubbles, and failure scope.
+The worked comparison is in
+[Appendix G](../appendices/g-worked-solutions.md#12-two-parallel-plans).
 
 The next chapter focuses on the parallel dimension with the most irregular
 traffic: experts.

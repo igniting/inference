@@ -141,10 +141,28 @@ Calculate saved compute per byte stored and per byte transferred. A high hit
 rate on tiny prefixes can be less useful than rare reuse of a very expensive
 document. Include queueing on the warm replica when evaluating the benefit.
 
-For an exercise, trace one prefix from creation on GPU A through host backup,
-remote lookup, transfer to GPU B, and eventual invalidation. At every boundary,
-write down the identity check, owner, reference count, timeout, and failure
-response. If any answer is “the cache handles it,” the design is incomplete.
+## Worked example: a hit worth 110 ms
+
+A 1-GiB prefix avoids 180 ms of prefill and takes 70 ms to load. Its gross
+saving is 110 ms before queueing and the opportunity cost of destination GPU
+memory. That value exists only if the prefix identity includes model, tokenizer,
+adapter, tenant namespace, token positions, and state format.
+
+Publication is ordered: GPU A seals data, host backup verifies it, metadata
+advertises a versioned location, and GPU B reserves and verifies destination
+blocks before local visibility. Cancellation leaves an unpublished destination
+that is released after the copy event. Invalidation removes lookup visibility
+before physical deletion.
+
+## Practice: write the state machine
+
+Trace that 1-GiB prefix from GPU A through host backup, remote metadata, transfer
+to GPU B, and invalidation. At each transition, record identity, owner,
+reference or lease, checksum, timeout, and failure response.
+
+Calculate net saved latency and saved compute per byte stored and transferred.
+If any transition delegates correctness to “the cache,” refine it. The worked
+lifecycle is in [Appendix G](../appendices/g-worked-solutions.md#15-distributed-prefix-lifecycle).
 
 A distributed cache provides locality information to the control plane. The
 next chapter considers how that plane routes and scales the service as a whole.

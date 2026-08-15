@@ -143,11 +143,28 @@ Trace events with session ID, turn generation, component timestamp, and clock
 source. Distributed clocks are imperfect, so include monotonic stage durations
 and propagate trace context.
 
-For an exercise, draw a 10-second conversation timeline containing partial
-speech recognition, a tool call, assistant speech, and user interruption. Give
-each stage a latency budget. Then delay the tool and inject a stale text-to-
-speech event after cancellation. Write the protocol rules that keep the session
-coherent.
+## Worked example: a late audio chunk
+
+The user stops speaking at 2.4 seconds. Endpointing stabilizes at 2.6, the LLM
+emits a tool call at 3.0, a holding phrase covers the tool wait, and response
+audio begins at 3.8. At 5.1 the user interrupts, advancing the turn generation
+from 7 to 8; playback becomes silent by 5.18. A generation-7 audio chunk arrives
+at 5.4 and is discarded.
+
+The generation number makes distributed cancellation coherent. Every event also
+needs a session ID, stream sequence number, and deadline. Generated but unheard
+text is not silently committed as something the user heard.
+
+## Practice: specify a ten-second protocol trace
+
+Draw partial ASR, endpointing, LLM prefill, tool execution, TTS, playback, and
+interruption on one timeline. Budget end-of-turn to first audio and interruption
+to silence separately. Delay the tool and deliver a stale audio event after
+cancellation.
+
+Write ordering, generation, backpressure, history-commit, and cleanup rules.
+The complete worked timeline is in
+[Appendix G](../appendices/g-worked-solutions.md#20-ten-second-conversation).
 
 Parts I through IV have focused on execution mechanisms. Part V turns them into
 a production contract: APIs, experiments, operations, economics, and security.

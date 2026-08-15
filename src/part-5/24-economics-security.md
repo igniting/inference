@@ -134,11 +134,37 @@ The rejected alternatives matter. They show which constraints led to the
 decision and prevent a future team from repeating the same investigation
 without new evidence.
 
-For the book's capstone, produce this record for one real or carefully specified
-workload. Include a cost sensitivity analysis: change traffic, context length,
-prefix reuse, hardware price, and SLO one at a time. A sound architecture is not
-the answer to one benchmark. It is a decision whose assumptions and failure
-modes are visible.
+## Worked example: a decision with triggers
+
+Atlas begins with self-managed four-way tensor-parallel replicas, continuous
+batching, local prefix caching, and hybrid queue-plus-locality routing. Prefill
+and decode remain colocated until measured long-prompt interference repays the
+KV transfer boundary. A managed API is an explicit overflow route, not an
+invisible retry.
+
+TP8 is rejected because wider layer-frequency collectives hurt the interactive
+regime. Unconditional disaggregation is rejected because short prompts do not
+repay transfer. Tenant caches default to isolated, and model artifacts,
+administrative controls, and public generation use separate security
+boundaries.
+
+The decision reopens if context length makes KV capacity binding, prefix reuse
+falls below its routing benefit, bursts become shorter than worker startup, or
+the TTFT objective tightens enough to justify separate prefill capacity.
+
+## Practice: write the capstone ADR
+
+Produce the Atlas architecture record using the workload and dense model from
+Chapters 2–4. Include topology, scheduling, caching, routing, overload,
+deployment, rollback, data retention, benchmark evidence, and rejected plans.
+
+Change traffic, context, prefix reuse, hardware price, and SLO one at a time.
+For each, name the threshold that triggers review rather than merely stating
+that cost changes. The worked ADR is in
+[Appendix G](../appendices/g-worked-solutions.md#24-architecture-decision).
+
+A sound architecture is not the answer to one benchmark. It is a decision whose
+assumptions and failure modes are visible.
 
 That completes the main text. The appendices provide notation, reference
 tables, reproducibility templates, deployment patterns, terminology, and the

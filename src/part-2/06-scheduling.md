@@ -162,21 +162,33 @@ enter. Rejecting early may produce more goodput than accepting a request that
 will time out. The rejection must also create backpressure. Automatic retries
 without delay can turn overload into a larger burst.
 
-## Build a small simulator
+## Worked example: one token budget, four requests
 
-You can study these policies without a GPU. Represent each request by its
-arrival time, prefill length, expected output length, priority, and state per
-token. At each simulated step, admit arrivals, choose work under token and
-memory budgets, calculate a step duration, and update progress.
+Give the scheduler 16 token slots per step. Request A arrives with a 24-token
+prefill; B arrives beside it with four prompt tokens and needs eight output
+tokens. If A consumes an unbroken prefill, B's interactive response waits even
+though both fit within a few steps.
 
-Use measurements from a real engine to make a lookup table for step duration;
-do not assume cost grows linearly with tokens. Compare first-come-first-served,
-priority with aging, and several prefill chunk sizes under steady and bursty
-traffic.
+With an eight-token chunk limit, the first step can schedule eight tokens of A
+and four of B. B can enter decode on the next step while A continues in bounded
+chunks. Reserving decode slots prevents later prefills from breaking B's output
+cadence.
 
-Record goodput, tail latency, preemptions, wasted computation, and results by
-traffic class. The exercise will show that scheduler quality cannot be reduced
-to GPU utilization.
+The example is incomplete unless step duration depends on its composition. A
+step with 16 prefill tokens and one with 16 decodes need not take the same time.
+Use a measured lookup table keyed by decode batch and prefill tokens; otherwise
+the simulator merely counts tokens.
+
+## Practice: implement and explain a schedule
+
+Simulate A `(arrival 0, prefill 24, output 4)`, B `(0, 4, 8)`, high-priority C
+`(1, 8, 4)`, and D `(2, 20, 2)` under a 16-token step budget and 40 units of
+live-state capacity. Compare FCFS with no chunking, eight-token chunks, and
+priority plus aging.
+
+Report each step's contents, TTFT, deadline-qualified goodput, preemptions, and
+memory state. State when D should be rejected. A worked schedule and scoring
+rule appear in [Appendix G](../appendices/g-worked-solutions.md#6-scheduler-simulation).
 
 The scheduler can only make safe decisions if memory has clear ownership. The
 next chapter examines the block manager and the reusable state behind it.

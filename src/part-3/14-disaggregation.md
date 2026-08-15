@@ -116,16 +116,27 @@ a KV-centric architecture using GPU, CPU, memory, and storage resources. It
 also highlights early rejection under overload, connecting disaggregation back
 to goodput and admission control.
 
-## Model the split before deploying it
+## Worked example: price the state boundary
 
-Measure prefill service time by input length and decode service time by active
-batch and context. Measure KV transfer by bytes, shard mapping, and concurrent
-traffic. Use these values in a small queueing simulation with separate stage
-pools.
+Use `prefill_ms = 20 + 0.035 × tokens`, a 45 ms decode step, and a KV link with
+12 ms setup plus payload at 22 GiB/s. The 6,000-token Atlas prompt creates about
+1.83 GiB of KV state. Ideal transfer is therefore roughly 97 ms, compared with
+about 230 ms of prefill.
 
-Compare colocated, always-disaggregated, and conditional designs. Report TTFT,
-ITL, end-to-end latency, goodput, transferred bytes, failed transfers, and idle
-capacity in each pool.
+That boundary is material. Disaggregation wins only if isolating decode from
+prefill interference and improving pool utilization repays the transfer and a
+new queue. An idle prefill worker is not capacity when no decode slot will be
+available afterward.
+
+## Practice: simulate three placements
+
+Build prefill, transfer, and decode service-time tables from the functions
+above. Compare colocated, always-disaggregated, and conditional placement for
+short and 6,000-token prompts under bursts.
+
+Report every stage queue, TTFT, ITL, goodput, transferred bytes, failure cleanup,
+and idle capacity. Derive a conditional split threshold. The worked model is in
+[Appendix G](../appendices/g-worked-solutions.md#14-prefilldecode-split).
 
 Disaggregation creates a new question: if valuable state can move between
 workers, should it survive beyond the request? Chapter 15 builds a distributed

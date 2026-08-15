@@ -141,15 +141,32 @@ Do not compare these systems by counting boxes. Compare what crosses each
 boundary and which component owns the truth. A separate process is meaningful
 only if you understand the isolation it provides and the communication it adds.
 
-## Trace one request yourself
+## Worked example: classify the waits
 
-Run a small request with detailed logging or a debugger. Draw a control path
-containing messages, queues, state transitions, and errors. Next to it, draw a
-data path containing tokens, tensors, block tables, logits, and stream events.
+The control path for one request is submit, validate, admit, schedule, allocate,
+execute, and finish. Its data path is text, token IDs, tensors, KV blocks,
+logits, sampled IDs, and streamed text. Drawing them separately exposes four
+different waits.
 
-Mark each place the CPU waits for the GPU or one process waits for another.
-Write down the invariant protected by that wait. Some waits are necessary for
-correctness. Others are opportunities to overlap work.
+Admission waits before allocation so rejected work cannot consume model state.
+The runner waits for the scheduler's block table so attention addresses the
+right pages. Sampling waits for logits because the next token is a true data
+dependency. Cleanup waits for the GPU completion event so a live address is not
+reallocated. These waits protect correctness.
+
+Tokenization for the next request and output processing for the previous step
+do not necessarily protect those invariants. They can overlap execution if
+their request-state updates are versioned and queues remain bounded.
+
+## Practice: draw two paths and defend every wait
+
+Trace one request through the frontend, engine process, scheduler, worker, model
+runner, and output process. Draw messages and state transitions on the control
+path; draw tokens, tensors, block tables, and logits on the data path.
+
+Mark every CPU/GPU and process/process wait. For each, state the invariant or
+classify it as an overlap candidate. The worked classification is in
+[Appendix G](../appendices/g-worked-solutions.md#5-control-and-data-paths).
 
 The most important wait sits inside the scheduler. Chapter 6 examines how it
 decides which requests move forward.

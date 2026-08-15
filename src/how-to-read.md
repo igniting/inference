@@ -47,3 +47,16 @@ Commands are illustrative unless a chapter labels them as tested. Never copy a
 serving configuration into production without checking the model license,
 engine revision, device support, exposed network interface, authentication, and
 memory headroom.
+
+## How to use the exercises
+
+The chapters follow one fictional service, Atlas, so the exercises accumulate
+rather than reset. First read the worked example in the chapter. Attempt the
+practice problem with the stated inputs and produce the requested artifact: a
+trace, table, state machine, simulator result, test plan, or decision record.
+Then compare your reasoning with [Appendix G](appendices/g-worked-solutions.md).
+
+The solutions are not configuration recipes. They make assumptions visible,
+show the calculation or invariant, and state what measurement could change the
+decision. A different answer is stronger when it explains the same constraints
+with better evidence.

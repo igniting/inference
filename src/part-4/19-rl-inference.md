@@ -121,15 +121,28 @@ Batch-invariant or deterministic modes help debugging, but may cost throughput.
 Use them to isolate differences even if the final production configuration is
 less strict.
 
-## Trace one policy update
+## Worked example: prepare, then commit
 
-Instrument a complete cycle: rollout admission, generation, reward, training,
-sleep or pause, weight transfer, invalidation, wake, and next rollout. Attach a
-policy version to every state object and message.
+Rollouts use policy version 41 while the trainer produces version 42 in inactive
+buffers. Every inference rank validates tensor shapes and checksums, then
+reports `prepared(42)`. Only after all ranks prepare does the coordinator commit
+generation 42. Ranks swap buffers, invalidate version-dependent caches and
+graphs, run a health forward pass, and reopen admission.
 
-Inject a failure halfway through one rank's update. The system should never
-resume with mixed weights. Then delay the trainer and observe whether rollout
-queues, stale trajectories, or memory use grow without bound.
+If one rank fails mid-copy, no commit is published. Prepared ranks keep version
+41 active and retry or discard their inactive buffers. This is a distributed
+transaction because a tensor-parallel group with mixed weights is not a valid
+model.
+
+## Practice: fail one update safely
+
+Trace rollout admission, reward, training, pause, staged transfer, prepare,
+commit, invalidation, health check, and wake. Attach the policy version to every
+trajectory, cache entry, graph, and message.
+
+Fail rank 3 during transfer and show why no mixed group resumes. Then delay the
+trainer and define queue-byte and policy-lag admission bounds. Compare with
+[Appendix G](../appendices/g-worked-solutions.md#19-policy-update-transaction).
 
 Inference inside training is still a serving system, but the customer is an
 algorithm with stronger version and reproducibility requirements. Chapter 20

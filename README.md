@@ -9,8 +9,10 @@ of any existing book.
 
 Read the published book at **[igniting.github.io/inference](https://igniting.github.io/inference/)**.
 The manuscript contains 24 chapters across five parts, plus practical
-appendices, a glossary, and a source ledger. Its research and originality rules
-are documented in the [research policy](src/research-method.md).
+appendices, a glossary, a source ledger, and a complete
+[worked-solutions manual](src/appendices/g-worked-solutions.md). Its research
+and originality rules are documented in the
+[research policy](src/research-method.md).
 
 ## Read locally
 
@@ -36,6 +38,8 @@ Pages.
 - [x] Draft all 24 chapters and six appendices
 - [x] Compare coverage and pedagogy with the supplied reference book
 - [x] Revise the complete manuscript after editorial critique
+- [x] Replace open-ended exercises with worked examples and full solutions
+- [x] Add a custom professional mdBook theme
 - [x] Publish reproducibly through GitHub Pages
 
 The source ledger pins the implementation revisions studied for this edition.

@@ -120,16 +120,30 @@ and SGLang's
 [`constrained`](https://github.com/sgl-project/sglang/tree/e161bd1265a0082478b7f1c09f224a52d315dc71/python/sglang/srt/constrained)
 packages.
 
-## Find the workload where speculation loses
+## Worked example: acceptance is not speedup
 
-Benchmark ordinary decode and at least two proposal strategies on predictable,
-unpredictable, short-output, and high-concurrency workloads. Record draft time,
-verification time, accepted tokens per target step, extra memory, graph
-dispatch, TTFT, ITL, and output equivalence.
+Ordinary target decode costs 8 ms per token. A speculative step spends 3 ms on
+drafting and 9 ms on verification. At 3.2 accepted tokens per step, it costs
+3.75 ms per accepted token. At 1.3 accepted tokens, it costs 9.23 ms and loses
+before accounting for extra memory.
 
-Then search deliberately for the losing case. A useful speculative system knows
-when not to speculate. Reporting only the prompt class with high acceptance
-turns an adaptive resource decision into a misleading universal claim.
+That produces an online decision rule: estimate accepted tokens and compare
+draft plus verification plus capacity cost with ordinary target work. Disable
+speculation for short remaining outputs, low recent acceptance, memory
+pressure, or graph-incompatible shapes. Acceptance rate remains an input to the
+decision, not the result.
+
+## Practice: find and explain the losing regime
+
+Benchmark ordinary decode and two proposal strategies on predictable,
+unpredictable, short-output, and high-concurrency traffic. Record draft and
+verification time, accepted tokens, extra memory, graph dispatch, TTFT, ITL,
+and output-distribution checks.
+
+Use the numbers above to derive the break-even acceptance level, then add one
+capacity penalty observed at concurrency. Write a rule for turning speculation
+off. The worked calculation is in
+[Appendix G](../appendices/g-worked-solutions.md#11-speculation-break-even).
 
 We have now followed a request through one engine, from allocation to kernels
 and decoding. Part III expands the same ideas across multiple accelerators and

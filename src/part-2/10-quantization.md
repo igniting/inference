@@ -113,5 +113,29 @@ Record the exact model artifact, calibration method, engine commit, kernel,
 device, and command. The winning format is the one that improves the service's
 constraint—not the one with the fewest bits in its name.
 
+## Worked example: bits do not choose the winner
+
+Compare BF16, weight-only INT4, and FP8 weights with FP8 KV state. INT4 can cut
+weight storage to roughly one quarter plus scales, but it leaves KV capacity
+unchanged and may pay dequantization or weak small-batch kernels. FP8 can reduce
+both weight and cache bytes, which may avoid long-context preemption even when
+one isolated operation is not faster.
+
+The correct decision begins with the binding constraint. If interactive ITL is
+the problem, test batch-1 decode kernels. If long documents exhaust memory,
+measure admitted contexts and preemption. Gate both against product quality,
+tool-call validity, long-context retrieval, and numerical stability.
+
+## Practice: make a deployment decision
+
+Evaluate those three formats on the same Atlas trace. Record weight, KV,
+workspace, and peak bytes; TTFT, ITL, throughput, and goodput across batch
+shapes; product-task quality; schema validity; repeated-run and log-probability
+drift.
+
+Choose a format for interactive and long-document tiers separately, and name
+the constraint that justifies each choice. Compare your reasoning with
+[Appendix G](../appendices/g-worked-solutions.md#10-quantization-decision).
+
 Chapter 11 turns to another way of reducing decode time: predicting several
 future tokens and checking them together.

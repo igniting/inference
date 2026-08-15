@@ -115,6 +115,31 @@ extreme logits, and masks with no valid continuation. Compare against a trusted
 implementation with tolerances suited to the dtype. Performance cannot excuse
 a model-semantic difference.
 
+## Worked example: Amdahl meets the page size
+
+Suppose a new attention kernel is 22 percent faster in isolation. Attention is
+2.0 ms of a 5.0 ms engine step, so the maximum step saving is 0.44 ms. If the
+new layout conversion costs 0.3 ms, the actual saving is 0.14 ms, or 2.8
+percent—not 22 percent.
+
+Now suppose the kernel requires 64-token pages instead of 16-token pages. More
+tail waste and coarser prefix boundaries reduce cache capacity. Preemption or
+recomputation can erase the remaining step win. The three levels answer
+different questions: whether the operation improved, whether the step improved,
+and whether users received more qualifying work.
+
+## Practice: decide whether to enable the kernel
+
+Evaluate the candidate above at isolated operation, complete step, and
+production-trace levels. Include batch 1 and 32, contexts 127 and 4,096,
+partially filled pages, and a multi-turn trace with prefix reuse. Measure
+conversion, metadata, cache occupancy, preemption, output equivalence, and
+goodput.
+
+Write a conditional enablement rule rather than declaring a universal winner.
+See [Appendix G](../appendices/g-worked-solutions.md#8-kernel-evaluation) for the
+worked arithmetic.
+
 Kernels reduce the cost of individual operations. The next chapter looks at a
 different source of overhead: launching and specializing the whole operation
 sequence.

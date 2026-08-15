@@ -51,4 +51,5 @@
 - [D. Deployment Patterns](appendices/d-deployment-patterns.md)
 - [E. Glossary](appendices/e-glossary.md)
 - [F. Source and Reproducibility Ledger](appendices/f-source-ledger.md)
+- [G. Worked Solutions](appendices/g-worked-solutions.md)
 - [Research and Originality Policy](research-method.md)

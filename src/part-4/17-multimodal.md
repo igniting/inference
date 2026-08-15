@@ -117,15 +117,29 @@ models may return one scalar per candidate or token-level values. Using a
 generation-oriented output path without defining these semantics creates subtle
 compatibility errors.
 
-## Profile the path to first output
+## Worked example: which cache tier matters?
 
-Take one representative multimodal request and place timestamps at byte
-receipt, media fetch, decode, preprocessing, encoder queue, encoder execution,
-feature transfer, language queue, prefill, and first output.
+An image request spends 35 ms receiving and fetching, 28 ms decoding and
+preprocessing, 40 ms in the encoder queue, 115 ms in the vision encoder, 12 ms
+transferring features, 190 ms in language queue and prefill, and 45 ms to the
+first token. TTFT is 465 ms.
 
-Repeat with the same media and a different question. Then compare no cache,
-processed-media cache, encoder-output cache, and full language-prefix reuse.
-Measure latency saved per byte retained and verify output equivalence.
+A processed-image cache saves only 28 ms. An encoder-output cache can save the
+preprocessing, encoder queue, and encoder—183 ms here—but retains a larger
+tensor tied to model and preprocessing versions. Full language-prefix reuse is
+legal only through the unchanged media and text boundary; a different question
+usually ends that match.
+
+## Practice: profile two questions about one image
+
+Use the timings above for the first question, then model a second question with
+the same image. Compare no cache, processed-media cache, encoder-output cache,
+and legal language-prefix reuse. Record identity requirements, bytes retained,
+latency saved per byte, and cache-disabled output equivalence.
+
+Then decide whether a remote encoder with 35 ms feature transfer is worthwhile
+if it removes 80 ms of language-worker queue. See
+[Appendix G](../appendices/g-worked-solutions.md#17-multimodal-first-output-path).
 
 The exercise makes the chapter's main point visible: multimodal inference is a
 pipeline of independently schedulable work. Chapter 18 examines another

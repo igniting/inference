@@ -110,15 +110,28 @@ Batching live sessions is possible when their frame clocks and shapes align.
 One late session should not stall all others, so the batch may need deadlines or
 selective dropping.
 
-## Build a stage timeline
+## Worked example: 30 repeated steps
 
-Profile one image or video pipeline. Record text encoding, each denoising step,
-cache hits, communication, decoding, and postprocessing. Repeat at several
-resolutions and batch sizes.
+An image pipeline uses 18 ms for text encoding, 30 denoising steps at 24 ms
+each, 55 ms for latent decoding, and 22 ms for postprocessing. Total time is 815
+ms, of which denoising contributes 720 ms.
 
-Next, test one caching policy and one parallel plan. Report visual-quality
-metrics and blinded samples beside latency and throughput. Finally, estimate a
-disaggregated placement and include intermediate transfer time.
+A cache that safely skips work equivalent to ten steps has a 240 ms upper-bound
+saving before lookup and correction. Doubling resolution changes latent work
+far more than text encoding, so the conclusion must be remeasured for each
+shape. Separating stages helps only when reuse, independent scaling, or better
+batching repays intermediate transfer and queueing.
+
+## Practice: justify one optimization
+
+Build a per-stage and per-step timeline from the numbers above. Test one caching
+policy at two resolutions and one parallel or disaggregated plan. Include graph
+buckets, synchronization, intermediate bytes, and every queue.
+
+Report latency and throughput beside declared visual-quality metrics and
+blinded samples. State the workload boundary where your optimization loses.
+The worked analysis is in
+[Appendix G](../appendices/g-worked-solutions.md#18-diffusion-timeline).
 
 The result should explain where time and bytes go, not announce that one
 optimization is universally best. Chapter 19 returns to language models in a
