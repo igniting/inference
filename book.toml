@@ -1,0 +1,17 @@
+[book]
+authors = ["The Inference Systems contributors"]
+language = "en"
+src = "src"
+title = "Inference Systems"
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/igniting/inference"
+edit-url-template = "https://github.com/igniting/inference/edit/main/{path}"
+site-url = "/inference/"
+
+[output.html.search]
+enable = true
