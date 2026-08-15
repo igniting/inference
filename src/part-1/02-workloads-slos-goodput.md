@@ -12,6 +12,38 @@ Before tuning an inference system, you need a precise description of the work
 that arrives and the promises the service must keep. Otherwise, a benchmark can
 improve while the product gets worse.
 
+## Visual map
+
+**Goodput filters completed work through the product contract.**
+
+```mermaid
+flowchart LR
+    A["Arrivals"] --> B["Queue"]
+    B --> C["Inference service"]
+    C --> D["Completed requests"]
+    D --> E{"Meets latency, quality, and correctness SLO?"}
+    E -->|Yes| F["Goodput"]
+    E -->|No| G["Completed but non-qualifying work"]
+```
+
+**The load generator changes what overload looks like.**
+
+```mermaid
+flowchart TB
+    O["Open-loop source"] -->|independent arrivals| S1["Server"]
+    S1 --> Q["Queue can grow"]
+    C["Closed-loop clients"] --> S2["Server"]
+    S2 --> R["Responses"]
+    R -->|permit next request| C
+```
+
+| Measure | Unit of observation | What it can hide |
+| --- | --- | --- |
+| TTFT | request | later stream stalls |
+| ITL | token gap | initial queue and prefill |
+| throughput | completed work per second | SLO failures and queue growth |
+| goodput | qualifying work per second | reasons individual requests failed |
+
 ## Decide what counts as work
 
 A text-generation service handles several nested units. A session contains

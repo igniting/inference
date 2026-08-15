@@ -14,6 +14,10 @@ appendices, a glossary, a source ledger, and a complete
 and originality rules are documented in the
 [research policy](src/research-method.md).
 
+Every chapter includes two block diagrams and a compact comparison table. The
+diagram source is versioned beside the prose so architectural explanations and
+their visuals change together.
+
 ## Read locally
 
 The book uses [mdBook](https://rust-lang.github.io/mdBook/).

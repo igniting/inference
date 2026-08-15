@@ -335,6 +335,71 @@ code {
   font-size: 13px;
 }
 
+.diagram {
+  margin: 1.8rem 0 2.2rem;
+  padding: 20px 18px;
+  overflow-x: auto;
+  border: 1px solid var(--table-border-color);
+  border-radius: 10px;
+  background:
+    linear-gradient(var(--trace-faint) 1px, transparent 1px),
+    linear-gradient(90deg, var(--trace-faint) 1px, transparent 1px),
+    var(--surface-raised);
+  background-size: 24px 24px;
+  box-shadow: 0 8px 22px rgba(13, 24, 42, 0.06);
+  text-align: center;
+}
+
+.diagram svg {
+  display: block;
+  margin: 0 auto;
+  max-width: 100% !important;
+  height: auto;
+}
+
+.diagram .node rect,
+.diagram .node polygon,
+.diagram .node circle,
+.diagram .node path {
+  fill: var(--surface-raised) !important;
+  stroke: var(--trace-blue) !important;
+  stroke-width: 1.5px !important;
+}
+
+.diagram .nodeLabel,
+.diagram .edgeLabel,
+.diagram text {
+  fill: var(--fg) !important;
+  color: var(--fg) !important;
+  font-family: var(--utility-font) !important;
+  font-size: 14px !important;
+}
+
+.diagram .edgePath path,
+.diagram .flowchart-link {
+  stroke: var(--state-teal) !important;
+  stroke-width: 1.8px !important;
+}
+
+.diagram marker path {
+  fill: var(--state-teal) !important;
+  stroke: var(--state-teal) !important;
+}
+
+.diagram .edgeLabel rect,
+.diagram .labelBkg {
+  fill: var(--surface-raised) !important;
+  opacity: 0.94 !important;
+}
+
+.diagram-error {
+  color: var(--fg);
+  font-family: var(--mono-font);
+  font-size: 13px;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
 .table-wrapper {
   margin: 1.8rem 0;
   border: 1px solid var(--table-border-color);
@@ -412,6 +477,11 @@ main hr {
     margin-inline: -8px;
     padding: 1rem;
     border-radius: 8px;
+  }
+
+  .diagram {
+    margin-inline: -8px;
+    padding: 14px 10px;
   }
 }
 

@@ -5,6 +5,42 @@ require scarce hardware, duplicate too many weights, expose administrative
 interfaces, or cost more per useful answer. Architecture is the process of
 making those constraints explicit.
 
+## Visual map
+
+**Technical efficiency becomes product economics only after qualification.**
+
+```mermaid
+flowchart LR
+    H["Hardware and service cost"] --> C["Available capacity"]
+    C --> T["Completed tokens or media"]
+    T --> G["SLO and quality-qualified output"]
+    G --> V["Product value"]
+    O["Engineering and on-call cost"] --> H
+    F["Failure and idle capacity"] --> H
+```
+
+**The architecture decision joins workload, placement, and trust boundaries.**
+
+```mermaid
+flowchart TB
+    W["Workload and SLO"] --> A["Architecture decision"]
+    M["Model and state topology"] --> A
+    H["Hardware and network"] --> A
+    S["Security and data policy"] --> A
+    A --> E["Benchmark and failure evidence"]
+    E --> R{"Review trigger crossed?"}
+    R -->|Yes| A
+    R -->|No| D["Continue deployment"]
+```
+
+| Decision lens | Unit or boundary | Hidden cost to include |
+| --- | --- | --- |
+| Economics | qualifying requests or sessions | idle, failed, and retried work |
+| Capacity | SLO-sustaining arrival rate | startup and recovery headroom |
+| Security | data and administrative trust zone | caches, logs, and model code |
+| Sourcing | managed, self-hosted, or hybrid | engineering, exit, and on-call cost |
+| Review | explicit changed assumption | migration and rollback effort |
+
 ## Choose an economic unit that reflects value
 
 Cost per GPU-hour is an input, not an outcome. Cost per request ignores sequence

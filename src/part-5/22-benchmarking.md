@@ -12,6 +12,38 @@ decision, it becomes a number generator.
 That question tells you what to hold constant, what to vary, and which result
 matters.
 
+## Visual map
+
+**A benchmark is an evidence loop, not a single load-generator run.**
+
+```mermaid
+flowchart LR
+    H["Falsifiable hypothesis"] --> W["Representative workload"]
+    W --> R["Controlled repeated runs"]
+    R --> A["Raw events and analysis"]
+    A --> Q["Quality and SLO gate"]
+    Q --> C["Conditional conclusion"]
+    C --> H
+```
+
+**Offered load must be swept through the service's operating regimes.**
+
+```mermaid
+flowchart LR
+    L["Low load"] --> S["Saturation approach"]
+    S --> O["Overload"]
+    L --> M1["Latency floor"]
+    S --> M2["Goodput knee"]
+    O --> M3["Queue growth and rejection"]
+```
+
+| Benchmark layer | Controlled input | Required output | Frequent mistake |
+| --- | --- | --- | --- |
+| Microbenchmark | operation and shape | latency and numerical error | claiming service speedup |
+| Engine | batch and state | step time and resource trace | excluding preparation |
+| Service | arrivals and requests | latency, errors, throughput, goodput | closed-loop overload masking |
+| Product | task population | usefulness and cost | optimizing invalid output |
+
 ## Begin with a hypothesis
 
 Write the expected causal chain before running the test. For example:

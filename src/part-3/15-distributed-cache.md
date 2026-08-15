@@ -9,6 +9,38 @@ A local prefix cache cannot satisfy both goals. A distributed cache makes state
 visible beyond one GPU, but turns reuse into a placement, transfer, and
 consistency problem.
 
+## Visual map
+
+**A hierarchical cache trades increasing capacity for increasing access cost.**
+
+```mermaid
+flowchart LR
+    G["GPU KV blocks"] <--> H["Host memory"]
+    H <--> L["Local storage"]
+    L <--> R["Remote cache"]
+    R <--> O["Durable object storage"]
+```
+
+**A remote hit becomes usable only after an ordered publication protocol.**
+
+```mermaid
+flowchart LR
+    I["Validate semantic identity"] --> M["Resolve location metadata"]
+    M --> A["Allocate destination blocks"]
+    A --> T["Transfer and checksum"]
+    T --> P["Publish local visibility"]
+    P --> U["Use with reference or lease"]
+    U --> E["Evict visibility then storage"]
+```
+
+| Tier | Capacity | Access shape | Best candidate |
+| --- | --- | --- | --- |
+| GPU | smallest | direct attention reads | active and hottest prefixes |
+| Host memory | larger | device transfer | recently evicted state |
+| Local storage | larger still | bulk sequential load | warm deployment-local state |
+| Remote cache | shared | network transfer and metadata | reused state across replicas |
+| Durable storage | largest | high latency | artifacts worth reconstructing later |
+
 ## Recompute, retain, or transfer
 
 Every reusable state object presents three choices. The service can discard and

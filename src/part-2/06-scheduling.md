@@ -9,6 +9,39 @@ The GPU cannot execute a vague collection of requests. It needs a concrete
 batch with valid memory for every position. Building that batch is the
 scheduler's job.
 
+## Visual map
+
+**Continuous batching changes membership at every engine step.**
+
+```mermaid
+flowchart LR
+    Q["Waiting requests"] --> S["Scheduler"]
+    A["Active decoders"] --> S
+    S --> B["Mixed token batch"]
+    B --> E["Execute one step"]
+    E --> F{"Finished?"}
+    F -->|No| A
+    F -->|Yes| O["Output and free state"]
+```
+
+**A token budget forces an explicit priority between work types.**
+
+```mermaid
+flowchart TB
+    R["Step token budget"] --> D["Reserve active decode tokens"]
+    D --> P["Add bounded prefill chunks"]
+    P --> X{"Memory and deadline still safe?"}
+    X -->|Yes| E["Execute batch"]
+    X -->|No| C["Delay, preempt, or reject"]
+```
+
+| Scheduler input | Why it matters | Failure if ignored |
+| --- | --- | --- |
+| remaining prompt work | sizes prefill chunks | one long prompt stalls decode |
+| live KV bytes | constrains admission | preemption storm or allocation failure |
+| priority and age | protects classes without starvation | unfair or permanently delayed work |
+| downstream capacity | couples distributed stages | completed prefill waits without decode |
+
 ## Why static batches waste work
 
 In a static batch, the server groups requests and runs them together until all

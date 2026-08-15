@@ -11,6 +11,38 @@ different systems.
 Hardware is not a bag of processors. It is a map of places where bytes can live
 and paths along which bytes can move.
 
+## Visual map
+
+**Every byte follows a physical path, even when the API hides it.**
+
+```mermaid
+flowchart LR
+    R["GPU registers and SRAM"] --> H["Device HBM"]
+    H --> P["PCIe or local GPU fabric"]
+    P --> M["Host memory and NUMA socket"]
+    M --> N["NIC and network fabric"]
+    N --> S["Remote memory or storage"]
+```
+
+**The roofline question chooses the first optimization direction.**
+
+```mermaid
+flowchart TB
+    O["Measure operation and byte traffic"] --> I["Compute arithmetic intensity"]
+    I --> X{"Below compute-to-bandwidth crossover?"}
+    X -->|Yes| B["Reduce bytes or improve locality"]
+    X -->|No| C["Reduce arithmetic or use faster compute"]
+    B --> V["Verify end-to-end bottleneck"]
+    C --> V
+```
+
+| Boundary | First question | Evidence |
+| --- | --- | --- |
+| HBM | are weights or KV reread? | achieved bandwidth and cache traffic |
+| GPU fabric | which collective dominates? | bytes, latency, overlap, stragglers |
+| PCIe and NUMA | is the copy staged or remote? | affinity and transfer timeline |
+| Network | is payload or setup dominant? | message-size throughput curve |
+
 ## Four limits to keep separate
 
 Hardware discussions often collapse everything into “speed.” In practice, four

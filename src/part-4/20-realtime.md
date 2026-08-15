@@ -8,6 +8,41 @@ session.
 Real-time inference is defined by deadlines and interruption, not merely low
 average latency.
 
+## Visual map
+
+**A live conversation streams through several models and transports.**
+
+```mermaid
+flowchart LR
+    A["Audio input"] --> R["Streaming ASR"]
+    R --> L["Language model"]
+    V["Video or events"] --> E["Incremental encoder"]
+    E --> L
+    L --> T["Tools and retrieval"]
+    T --> L
+    L --> S["Streaming TTS"]
+    S --> P["Playback buffer"]
+```
+
+**Interruption advances the session generation and fences late work.**
+
+```mermaid
+flowchart LR
+    G7["Turn generation 7"] --> O["Text and audio in flight"]
+    I["User interruption"] --> G8["Advance to generation 8"]
+    G8 --> C["Cancel scheduling, synthesis, and playback"]
+    O --> X{"Event generation current?"}
+    X -->|No| D["Discard late event"]
+    X -->|Yes| P["Deliver event"]
+```
+
+| User-visible interval | Begins | Ends | Primary owner |
+| --- | --- | --- | --- |
+| end-of-turn to text | stable endpoint | first useful token | ASR and LLM path |
+| end-of-turn to audio | stable endpoint | audible first sample | full speech pipeline |
+| interruption to silence | new speech detected | playback stopped | session controller |
+| stream freshness | media arrival | processing or drop | deadline-aware queues |
+
 ## Build the latency budget backward
 
 Suppose the product allows 700 milliseconds from the end of a user's phrase to

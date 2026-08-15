@@ -48,6 +48,19 @@ serving configuration into production without checking the model license,
 engine revision, device support, exposed network interface, authentication, and
 memory headroom.
 
+## Reading the diagrams
+
+Blue-outlined blocks represent components, stages, or owned state. Teal arrows
+show data, control, or feedback movement; the nearby label says which when the
+distinction matters. A decision diamond divides legal paths rather than ranking
+them. Tables beneath diagrams make the comparison exact by naming the object,
+constraint, failure, or measurement associated with each path.
+
+Treat every diagram as a hypothesis about the system boundary. Real
+implementations may combine boxes in one process or split one box across many
+workers. The questions to preserve are who owns the state, which dependency
+crosses the arrow, and which queue can delay it.
+
 ## How to use the exercises
 
 The chapters follow one fictional service, Atlas, so the exercises accumulate

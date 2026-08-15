@@ -14,6 +14,39 @@ sent them over the network.
 Any one of those steps can become the reason the assistant feels slow or fails.
 Inference engineering is the work of understanding the whole path.
 
+## Visual map
+
+**One request crosses several queues and state owners.**
+
+```mermaid
+flowchart LR
+    A["Client"] --> B["API and validation"]
+    B --> C["Router"]
+    C --> D["Engine queue"]
+    D --> E["Scheduler"]
+    E --> F["Model runner"]
+    F --> G["Output stream"]
+    G --> A
+    H["KV and session state"] <--> E
+```
+
+**The three planes operate at different time scales but share evidence.**
+
+```mermaid
+flowchart TB
+    M["Management plane: deploy and configure"] --> C["Control plane: place and recover"]
+    C --> D["Data plane: schedule and execute"]
+    D --> T["Metrics, logs, and traces"]
+    T --> C
+    T --> M
+```
+
+| Plane | Typical decision | State consulted | Decision cadence |
+| --- | --- | --- | --- |
+| Data | next token batch | request and block tables | every engine step |
+| Control | destination replica | queues, locality, health | every request or event |
+| Management | release and capacity | versions, policy, demand | minutes to days |
+
 ## From model call to serving system
 
 It is useful to begin with a simple request lifecycle:

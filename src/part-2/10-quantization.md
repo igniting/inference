@@ -8,6 +8,38 @@ The catch is that fewer bits represent fewer distinct values. Quantization must
 preserve the information the model needs, and the hardware must have an
 efficient way to use the chosen format.
 
+## Visual map
+
+**Quantization inserts representation changes into the execution path.**
+
+```mermaid
+flowchart LR
+    W["High-precision weights"] --> Q["Quantize and store scales"]
+    Q --> K["Supported low-precision kernel"]
+    A["Activations and KV state"] --> C["Calibrate or scale"]
+    C --> K
+    K --> O["Output logits"]
+```
+
+**A deployable format must pass both a systems gate and a quality gate.**
+
+```mermaid
+flowchart TB
+    F["Candidate format"] --> M{"Fits memory and has target kernels?"}
+    M -->|No| R["Reject for this platform"]
+    M -->|Yes| P["Measure workload performance"]
+    P --> Q{"Passes product quality and stability?"}
+    Q -->|No| R
+    Q -->|Yes| D["Deploy for the qualifying tier"]
+```
+
+| Quantized object | Main benefit | Main numerical risk | System dependency |
+| --- | --- | --- | --- |
+| Weights | fit and lower weight traffic | dequantization error | matrix-kernel support |
+| Activations | lower intermediate traffic | outlier range | calibration and accumulation |
+| KV state | more active context | attention drift over length | attention-backend support |
+| Logits or sampler | smaller final operations | changed token probabilities | output contract |
+
 ## Values, ranges, and scales
 
 Floating-point formats divide their bits among sign, exponent, and significand.

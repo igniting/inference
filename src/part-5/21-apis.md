@@ -10,6 +10,43 @@ inference correctness.
 The API is the boundary where a changing engine promises stable behavior to
 its callers.
 
+## Visual map
+
+**The API translates a public contract into engine work and back again.**
+
+```mermaid
+flowchart LR
+    C["Client request"] --> A["Authenticate and authorize"]
+    A --> V["Validate limits and semantics"]
+    V --> T["Template and tokenize"]
+    T --> E["Engine request"]
+    E --> O["Output events"]
+    O --> P["Protocol framing and usage"]
+    P --> C
+```
+
+**A streamed request remains a state machine after the connection changes.**
+
+```mermaid
+flowchart LR
+    Q["Queued"] --> R["Running"]
+    R --> S["Streaming"]
+    S --> F["Finished"]
+    Q --> C["Cancelling"]
+    R --> C
+    S --> C
+    C --> D["Device work drained"]
+    D --> X["State released"]
+```
+
+| Contract surface | Must specify | Dangerous ambiguity |
+| --- | --- | --- |
+| tokenization | model, template, truncation | same text becomes different tokens |
+| streaming | event order and finish semantics | partial output mistaken for completion |
+| cancellation | terminal event and cleanup | disconnected work keeps capacity |
+| retries | request and tool idempotency | duplicated external action |
+| structured output | schema and refusal behavior | syntactically valid but unsafe action |
+
 ## An endpoint is more than a URL
 
 A production server may expose chat, text completion, embedding, scoring,

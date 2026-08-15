@@ -8,6 +8,40 @@ Speculative decoding asks whether a cheaper method can guess several future
 tokens and let the target model verify them in parallel. When the guesses are
 good and cheap, one target step advances the sequence by more than one token.
 
+## Visual map
+
+**Speculative decoding proposes several tokens but commits only verified work.**
+
+```mermaid
+flowchart LR
+    C["Current accepted prefix"] --> D["Draft proposes tokens"]
+    D --> V["Target verifies proposal"]
+    V --> A{"Accepted prefix length"}
+    A --> K["Commit accepted tokens"]
+    K --> C
+    A --> F["Sample correction at first rejection"]
+    F --> C
+```
+
+**Constrained decoding adds parser state to every sampling step.**
+
+```mermaid
+flowchart LR
+    L["Model logits"] --> M["Grammar or schema mask"]
+    P["Parser state"] --> M
+    M --> S["Sample legal token"]
+    S --> U["Update parser state"]
+    U --> P
+    S --> O["Output stream"]
+```
+
+| Mechanism | Added state | Expected benefit | Common losing case |
+| --- | --- | --- | --- |
+| draft model | draft weights and KV | several accepted tokens per target step | low acceptance or memory pressure |
+| n-gram proposal | prefix index | cheap repeated-text proposals | novel text |
+| grammar mask | parser or automaton state | valid structured output | complex masks or unsupported batching |
+| lookahead slots | reserved cache capacity | stable proposal execution | reduced normal concurrency |
+
 ## Draft, verify, accept
 
 The classic method uses a small draft model. The draft proposes a run of tokens.

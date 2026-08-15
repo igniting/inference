@@ -8,6 +8,38 @@ positions, or complete requests. Each choice reduces one device's work or
 memory by moving something between devices. Parallelism is therefore best
 understood as a data-movement plan.
 
+## Visual map
+
+**Parallel dimensions split different objects and create different traffic.**
+
+```mermaid
+flowchart TB
+    M["Model and request work"] --> D["Data parallel: replicas"]
+    M --> T["Tensor parallel: layer tensors"]
+    M --> P["Pipeline parallel: layer stages"]
+    M --> C["Context parallel: sequence positions"]
+    M --> E["Expert parallel: experts"]
+```
+
+**A rank mesh must be mapped onto the physical fabric.**
+
+```mermaid
+flowchart LR
+    A["Logical TP group 0"] --> I0["Fast-link island 0"]
+    B["Logical TP group 1"] --> I1["Fast-link island 1"]
+    I0 --> N["Inter-node network"]
+    I1 --> N
+    N --> P["Pipeline or replica traffic"]
+```
+
+| Dimension | Partitioned object | Frequent communication | Best first use |
+| --- | --- | --- | --- |
+| Data | requests | little on inference path | model fits and concurrency exists |
+| Tensor | layer computation and weights | layer-frequency collectives | weights do not fit one device |
+| Pipeline | layer ranges | stage activations | slower links or very large models |
+| Context | positions and KV | partial attention results | context state is binding |
+| Expert | expert weights and tokens | dispatch and combine | MoE weight fit and scaling |
+
 ## Start with replication
 
 If the model fits on one device, the simplest scale-out design is replication.

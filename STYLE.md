@@ -17,6 +17,11 @@ pedagogical qualities, not language to imitate.
 - Add transitions that explain why the next section follows from the last.
 - Use tables and lists only when comparison or enumeration is clearer than
   prose.
+- Give every chapter at least two diagrams that explain distinct relationships:
+  a data or control path and a decision, state, or feedback loop. Place them
+  before the detailed prose they organize.
+- Use tables for exact mappings, conditions, or trade-offs. Do not duplicate a
+  diagram as a table unless the table adds a decision-relevant dimension.
 - Keep implementation details subordinate to the engineering idea.
 - End with a practical investigation, not a generic recap list.
 
@@ -45,3 +50,5 @@ pedagogical qualities, not language to imitate.
 4. Are citations close to claims without interrupting the explanation?
 5. Does the chapter connect naturally to the chapters before and after it?
 6. Can the final exercise be completed with information in the chapter?
+7. Do the diagrams expose state, movement, or dependency rather than decorate
+   the page?

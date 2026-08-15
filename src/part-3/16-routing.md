@@ -9,6 +9,42 @@ Routing is the cluster-level version of scheduling. The local scheduler chooses
 the next work on one engine. The router chooses which engine should own a new
 request.
 
+## Visual map
+
+**The global router predicts a destination; the local scheduler owns execution.**
+
+```mermaid
+flowchart LR
+    A["Request and deadline"] --> R["Global router"]
+    T["Stale queue and locality telemetry"] --> R
+    R --> W1["Replica 1 scheduler"]
+    R --> W2["Replica 2 scheduler"]
+    R --> W3["Replica 3 scheduler"]
+    W1 --> T
+    W2 --> T
+    W3 --> T
+```
+
+**A hybrid routing score compares waiting, recomputation, and movement.**
+
+```mermaid
+flowchart TB
+    C["Candidate replica"] --> Q["Estimate queue time"]
+    C --> P["Estimate missing-prefix compute"]
+    C --> T["Estimate transfer or adapter load"]
+    Q --> S["Combined cost plus uncertainty"]
+    P --> S
+    T --> S
+    S --> D["Choose destination and record prediction"]
+```
+
+| Policy | Sees queue? | Sees locality? | Characteristic failure |
+| --- | --- | --- | --- |
+| Round robin | no | no | unequal work per request |
+| Least work | yes | no | repeated expensive prefill |
+| Cache only | no | yes | hot cached replica |
+| Hybrid cost | estimated | estimated | stale or misweighted predictions |
+
 ## A replica has more state than “healthy”
 
 Useful routing information can include queue length, estimated remaining work,

@@ -10,6 +10,40 @@ threads. A model server may launch hundreds of kernels in one step, including
 matrix multiplications, normalization, positional encoding, attention,
 activation functions, expert routing, sampling, and memory copies.
 
+## Visual map
+
+**Backend selection is a compatibility decision before a speed decision.**
+
+```mermaid
+flowchart TB
+    R["Runtime shape and model metadata"] --> S["Backend selector"]
+    S --> A["Attention kernel"]
+    S --> M["Matrix and quantization kernels"]
+    S --> E["Expert kernels"]
+    S --> P["Sampling kernels"]
+    A --> V["Correctness and performance validation"]
+    M --> V
+    E --> V
+    P --> V
+```
+
+**A kernel claim must survive three expanding measurement boundaries.**
+
+```mermaid
+flowchart LR
+    K["Isolated kernel"] --> S["Complete engine step"]
+    S --> W["Production-shaped workload"]
+    K -. "shape speed" .-> R["Result"]
+    S -. "conversion and launch" .-> R
+    W -. "queue, cache, and goodput" .-> R
+```
+
+| Level | Includes | Can establish | Cannot establish alone |
+| --- | --- | --- | --- |
+| Kernel | one operation and shapes | local speed and numerical error | scheduler or cache effect |
+| Engine step | metadata and surrounding operations | step critical path | production queue behavior |
+| Workload | arrivals, reuse, output, quality | service goodput | universal hardware ranking |
+
 ## Why fewer operations can mean more speed
 
 Framework code often expresses a calculation as several tensor operations.

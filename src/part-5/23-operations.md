@@ -8,6 +8,39 @@ pool?
 Observability is the ability to answer that question from the system's outputs.
 It begins with a model of the request path, not a large dashboard.
 
+## Visual map
+
+**Operations needs signals from the request path and its resource owners.**
+
+```mermaid
+flowchart LR
+    R["Request path"] --> M["Metrics: rates and distributions"]
+    R --> T["Traces: waits and boundaries"]
+    R --> L["Logs: decisions and failures"]
+    M --> D["Diagnosis"]
+    T --> D
+    L --> D
+    D --> A["Safe action and rollback"]
+```
+
+**Readiness progresses through model-specific startup stages.**
+
+```mermaid
+flowchart LR
+    P["Process alive"] --> W["Weights loaded"]
+    W --> G["Distributed groups ready"]
+    G --> C["Kernels compiled and graphs captured"]
+    C --> H["Health execution passed"]
+    H --> R["Router membership ready"]
+```
+
+| Symptom | First split | Evidence | Unsafe shortcut |
+| --- | --- | --- | --- |
+| high TTFT, low GPU use | ingress versus engine wait | queue ages and traces | add accelerators blindly |
+| normal TTFT, high ITL | decode versus output path | step and stream gaps | tune prefill only |
+| memory pressure | live versus reusable state | blocks, references, eviction | restart without leak check |
+| one slow rank | compute versus communication | per-rank timeline | average utilization |
+
 ## Metrics show shape; traces show path
 
 Metrics summarize behavior over time. Useful families include arrival and

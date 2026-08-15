@@ -8,6 +8,40 @@ spatiotemporal tensor.
 The serving system still needs batching, parallelism, caching, graphs, and
 stage placement—but their meaning changes.
 
+## Visual map
+
+**Diffusion repeats a denoising stage around persistent latent state.**
+
+```mermaid
+flowchart LR
+    P["Prompt"] --> T["Text encoder"]
+    T --> C["Conditioning"]
+    N["Initial noise"] --> D["Denoising model"]
+    C --> D
+    D --> S["Step scheduler"]
+    S -->|next latent and timestep| D
+    S -->|final latent| V["Image or video decoder"]
+    V --> O["Media output"]
+```
+
+**Serving optimizations act at different boundaries in the loop.**
+
+```mermaid
+flowchart TB
+    R["Request resolution, steps, and conditioning"] --> B["Compatible batching"]
+    B --> G["Graph bucket"]
+    G --> K["Cross-step cache policy"]
+    K --> P["Parallel or staged placement"]
+    P --> Q["Latency and visual-quality evaluation"]
+```
+
+| Mechanism | Saves | Compatibility condition | Quality risk |
+| --- | --- | --- | --- |
+| step batching | launch and weight reuse | resolution, step, and model path | none if semantics match |
+| graph replay | CPU launch work | captured shape and control flow | none if correct fallback |
+| cross-step cache | repeated intermediate compute | sufficiently similar state | approximation drift |
+| stage split | independent scaling | transfer cheaper than queue benefit | none, but latency can regress |
+
 ## Follow the diffusion pipeline
 
 A common pipeline contains four stages:

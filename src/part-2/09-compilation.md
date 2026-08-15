@@ -7,6 +7,41 @@ the GPU busy. The empty spaces between kernels become the bottleneck.
 Compilation and graph execution reduce that overhead by doing more planning
 before the request arrives.
 
+## Visual map
+
+**Compilation moves repeated host work into reusable artifacts.**
+
+```mermaid
+flowchart LR
+    E["Eager Python and dispatch"] --> O["Operation launches"]
+    O --> G["GPU execution"]
+    T["Captured or compiled graph"] --> R["Graph replay"]
+    R --> G
+    S["Runtime shape"] --> D["Artifact dispatcher"]
+    D --> T
+    D --> E
+```
+
+**Graph buckets trade artifact count against padding and fallback.**
+
+```mermaid
+flowchart TB
+    B["Requested batch size"] --> X{"Compatible captured bucket?"}
+    X -->|Exact| R["Replay exact graph"]
+    X -->|Larger bucket| P["Pad and replay"]
+    X -->|None| E["Compile or eager fallback"]
+    R --> M["Record dispatch outcome"]
+    P --> M
+    E --> M
+```
+
+| Artifact outcome | Immediate cost | Long-term risk | Metric |
+| --- | --- | --- | --- |
+| exact replay | low launch overhead | artifact memory | exact-bucket hit rate |
+| padded replay | unused device work | latency at bucket gaps | padding ratio |
+| eager fallback | repeated launches | CPU gaps | fallback rate |
+| new compilation | warm-up and memory | artifact explosion | compile count and time |
+
 ## Eager execution pays as it goes
 
 In eager execution, the framework encounters operations and dispatches them at

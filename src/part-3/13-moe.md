@@ -7,6 +7,41 @@ parameter to every token.
 
 For serving, the price of that conditional compute is movement and imbalance.
 
+## Visual map
+
+**Each MoE layer dispatches token representations to selected experts.**
+
+```mermaid
+flowchart LR
+    T["Input tokens"] --> R["Router and top-k selection"]
+    R --> D["Dispatch by expert owner"]
+    D --> E1["Expert 1"]
+    D --> E2["Expert 2"]
+    D --> EN["Other experts"]
+    E1 --> C["Combine weighted outputs"]
+    E2 --> C
+    EN --> C
+    C --> O["Layer output"]
+```
+
+**Expert load balancing is a measured placement feedback loop.**
+
+```mermaid
+flowchart LR
+    X["Router trace"] --> L["Tokens per expert and rank"]
+    L --> P["Candidate placement"]
+    P --> M["Weight movement under new generation"]
+    M --> V["Validate straggler and goodput change"]
+    V --> X
+```
+
+| MoE quantity | Why averages mislead | Better observation |
+| --- | --- | --- |
+| tokens per expert | hot experts hide inside a mean | maximum and distribution per step |
+| rank utilization | one rank gates layer completion | busiest-rank service time |
+| dispatch bytes | topology changes path cost | bytes by source, destination, and link |
+| EPLB gain | movement can exceed saved work | amortization time and goodput |
+
 ## Follow one token through an MoE layer
 
 Assume the layer has 64 experts and selects two per token. Experts are spread

@@ -10,6 +10,38 @@ The solution used by modern engines resembles virtual memory. Requests see a
 logical sequence of positions. The engine backs those positions with fixed-size
 physical blocks that do not need to be contiguous.
 
+## Visual map
+
+**A block table separates logical sequence order from physical placement.**
+
+```mermaid
+flowchart LR
+    L0["Logical block 0"] --> P3["Physical block 3"]
+    L1["Logical block 1"] --> P8["Physical block 8"]
+    L2["Logical block 2"] --> P1["Physical block 1"]
+    P3 --> K["Paged attention kernel"]
+    P8 --> K
+    P1 --> K
+```
+
+**Reusable blocks move through ownership states before returning to the pool.**
+
+```mermaid
+flowchart LR
+    F["Free"] -->|allocate| W["Private and writable"]
+    W -->|GPU complete| S["Sealed"]
+    S -->|publish| R["Reusable and referenced"]
+    R -->|evict index| D["Draining"]
+    D -->|reference count zero| F
+```
+
+| Cache concern | Identity or invariant | Observable signal |
+| --- | --- | --- |
+| legal reuse | tokens, positions, weights, adapter, format | matched tokens by namespace |
+| branching | sealed blocks shared; tail copied | copy-on-write count |
+| cancellation | in-flight blocks remain pinned | deferred-release age |
+| eviction | visibility removed before storage | references after index removal |
+
 ## Logical tokens, physical blocks
 
 Consider a block that holds 16 token positions. A 35-token sequence needs three

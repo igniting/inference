@@ -14,6 +14,39 @@ architectures have changed many details since then, so this chapter emphasizes
 the execution properties an engine must discover rather than one fixed block
 diagram.
 
+## Visual map
+
+**Prefill creates persistent state; decode consumes and extends it.**
+
+```mermaid
+flowchart LR
+    P["Prompt tokens"] --> F["Prefill"]
+    F --> K["KV state"]
+    K --> D["Decode step"]
+    D --> L["Logits and sampling"]
+    L --> N["Next token"]
+    N --> K
+    N --> D
+```
+
+**Different model families create different serving graphs.**
+
+```mermaid
+flowchart TB
+    R["Request"] --> T{"Model topology"}
+    T --> A["Dense decoder: repeated token loop"]
+    T --> B["MoE decoder: route to experts"]
+    T --> C["Multimodal: encoder then decoder"]
+    T --> D["Diffusion: repeated denoising loop"]
+```
+
+| Topology | Persistent state | Irregular work | Natural split point |
+| --- | --- | --- | --- |
+| Dense decoder | KV by token | prompt and output length | prefill and decode |
+| MoE decoder | KV plus expert weights | token-to-expert routing | expert ownership |
+| Multimodal | encoder features plus KV | media shape and token count | encoder boundary |
+| Diffusion | latent and conditioning | resolution and denoising step | pipeline stages |
+
 ## The autoregressive loop
 
 A decoder-only language model begins with token IDs. It converts them to

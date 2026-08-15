@@ -17,6 +17,39 @@ prompts -> rollout generation -> reward -> training update
 This workload changes the engine's lifecycle. Model weights are no longer
 immutable for the duration of the service.
 
+## Visual map
+
+**Online reinforcement learning couples serving and training through versions.**
+
+```mermaid
+flowchart LR
+    P["Prompts"] --> I["Inference rollout workers"]
+    I --> R["Rewards and trajectories"]
+    R --> T["Trainer"]
+    T --> W["New policy weights"]
+    W --> U["Versioned weight update"]
+    U --> I
+```
+
+**A multi-rank update prepares everywhere before it commits anywhere.**
+
+```mermaid
+flowchart LR
+    S["Stage new weights"] --> V["Validate shapes and checksums"]
+    V --> A{"All ranks prepared?"}
+    A -->|No| R["Retain old active version"]
+    A -->|Yes| C["Commit new generation"]
+    C --> I["Invalidate dependent state"]
+    I --> H["Health forward pass and reopen"]
+```
+
+| Coupled resource | Inference symptom | Training consequence | Control |
+| --- | --- | --- | --- |
+| accelerator memory | KV competes with optimizer or weights | smaller training batch | sleep and explicit ownership |
+| policy version | mixed or stale rollouts | biased update | version on every artifact |
+| rollout queue | unbounded generation | policy lag | lag and byte admission limits |
+| numerical path | log-probability mismatch | unstable ratios | reproducible token metadata |
+
 ## Rollouts arrive in groups and waves
 
 Training algorithms often request several completions for the same prompt.

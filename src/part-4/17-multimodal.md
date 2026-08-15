@@ -8,6 +8,39 @@ language-model input before the first output token appears.
 
 If you measure only language decode, you miss most of the request.
 
+## Visual map
+
+**A multimodal request is a pipeline before language decoding begins.**
+
+```mermaid
+flowchart LR
+    B["Media bytes"] --> D["Decode and validate"]
+    D --> P["Resize and preprocess"]
+    P --> E["Modality encoder"]
+    E --> X["Projected feature tokens"]
+    T["Text tokens"] --> L["Language prefill"]
+    X --> L
+    L --> O["Autoregressive output"]
+```
+
+**Reuse can occur at several boundaries with different identity rules.**
+
+```mermaid
+flowchart TB
+    M["Stable media identity"] --> C1["Decoded-media cache"]
+    C1 --> C2["Preprocessed-tensor cache"]
+    C2 --> C3["Encoder-output cache"]
+    C3 --> C4["Language-prefix KV cache"]
+    C4 --> Q["New question about same media"]
+```
+
+| Reuse boundary | Saves | Version identity must include | Typical size |
+| --- | --- | --- | --- |
+| decoded media | codec work | content and decoder policy | pixels or samples |
+| preprocessed tensor | resize and normalization | preprocessing configuration | dense input tensor |
+| encoder output | encoder queue and compute | encoder and projection weights | feature sequence |
+| language KV | language prefill | full token and model semantics | per-layer attention state |
+
 ## Media begins as untrusted bytes
 
 Images, audio, video, and documents arrive in formats optimized for storage and

@@ -13,6 +13,40 @@ User: Why is my device blinking amber?
 The request looks simple. By the time its first token reaches the user, several
 components have made decisions on its behalf.
 
+## Visual map
+
+**The engine separates user-facing work from step-critical execution.**
+
+```mermaid
+flowchart LR
+    A["API process"] --> B["Input and tokenization"]
+    B --> C["Engine core"]
+    C --> D["Scheduler"]
+    D --> E["Executor"]
+    E --> F["Worker and model runner"]
+    F --> G["Output processor"]
+    G --> A
+```
+
+**Control messages and bulk data take related but distinct paths.**
+
+```mermaid
+flowchart TB
+    R["Request record"] --> S["Schedule metadata"]
+    S --> W["Worker command"]
+    W --> C["Completion event"]
+    T["Token tensors"] --> M["Model execution"]
+    K["KV blocks"] <--> M
+    M --> L["Logits and sampled IDs"]
+```
+
+| Boundary | Control object | Data object | Required invariant |
+| --- | --- | --- | --- |
+| API to engine | request and deadline | token IDs | accepted exactly once |
+| scheduler to worker | step plan | block tables and tensors | metadata matches allocation |
+| worker to output | completion and status | sampled tokens | tokens belong to current step |
+| cleanup | terminal transition | KV and buffers | release after last device user |
+
 ## The public request becomes an internal request
 
 The frontend receives the HTTP or RPC message. It authenticates the caller,

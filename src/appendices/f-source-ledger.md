@@ -124,6 +124,15 @@ Documentation can describe a release different from the pinned source snapshot.
 When the two conflict, the manuscript either describes the pinned code or marks
 the behavior as release-dependent.
 
+## Publication tooling
+
+Block diagrams are rendered with
+[Mermaid 11.16.0](https://www.npmjs.com/package/mermaid/v/11.16.0), pinned in the
+book theme. The integration follows Mermaid's official
+[initialization and rendering guidance](https://mermaid.js.org/config/usage.html).
+Diagram definitions remain readable as text if the client-side renderer cannot
+load.
+
 ## Implementation map by chapter
 
 | Chapters | vLLM paths | SGLang paths |

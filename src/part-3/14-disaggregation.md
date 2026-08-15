@@ -9,6 +9,38 @@ Disaggregated serving separates stages so each can be scheduled and scaled
 independently. The common case places prefill on one worker pool and decode on
 another.
 
+## Visual map
+
+**Prefill/decode separation turns one engine queue into a stage pipeline.**
+
+```mermaid
+flowchart LR
+    A["Admission"] --> P["Prefill queue and workers"]
+    P --> K["KV state transfer"]
+    K --> D["Decode queue and workers"]
+    D --> O["Output stream"]
+    D --> B["Decode capacity signal"]
+    B --> A
+```
+
+**Conditional placement chooses between local reuse and a transfer boundary.**
+
+```mermaid
+flowchart TB
+    R["Request shape and queue state"] --> X{"Split saves more interference than transfer costs?"}
+    X -->|No| C["Colocated prefill and decode"]
+    X -->|Yes| P["Remote prefill"]
+    P --> T["Versioned KV transfer"]
+    T --> D["Reserved decode slot"]
+```
+
+| Stage | Capacity variable | New failure mode | Admission signal |
+| --- | --- | --- | --- |
+| Prefill | prompt tokens per second | output state piles up | estimated service time |
+| Transfer | bytes and concurrent copies | partial or timed-out KV | reserved bandwidth and deadline |
+| Decode | active sequences and context | no slot after prefill | predicted decode availability |
+| Output | client consumption | backpressure retains state | buffer age and disconnect |
+
 ## Why split prefill from decode?
 
 Prefill benefits from large compute-efficient operations. Decode values steady,
