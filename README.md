@@ -7,9 +7,10 @@ generative-model inference. It studies the ideas embodied in production
 systems—including vLLM and SGLang—without reproducing the structure or prose
 of any existing book.
 
-The project is currently in the **outline review** stage. Start with the
-[complete chapter outline](src/outline.md) and the
-[research and originality policy](src/research-method.md).
+Read the published book at **[igniting.github.io/inference](https://igniting.github.io/inference/)**.
+The manuscript contains 24 chapters across five parts, plus practical
+appendices, a glossary, and a source ledger. Its research and originality rules
+are documented in the [research policy](src/research-method.md).
 
 ## Read locally
 
@@ -25,17 +26,18 @@ To verify the static build:
 mdbook build
 ```
 
-The GitHub Actions workflow publishes the generated site to GitHub Pages after
-Pages is configured to use **GitHub Actions** as its source.
+The GitHub Actions workflow publishes every successful `main` build to GitHub
+Pages.
 
 ## Status
 
-- [x] Define the book's thesis, audience, and boundaries
-- [x] Produce the full part, chapter, and section architecture
+- [x] Define the thesis, audience, and boundaries
 - [x] Establish an evidence and originality policy
-- [ ] Review and approve the outline
-- [ ] Create chapter briefs and assign evidence
-- [ ] Draft, review, benchmark, and illustrate the chapters
+- [x] Draft all 24 chapters and six appendices
+- [x] Compare coverage and pedagogy with the supplied reference book
+- [x] Revise the complete manuscript after editorial critique
+- [x] Publish reproducibly through GitHub Pages
 
-No content license has been selected yet. Contributions should wait until the
-copyright and licensing policy is decided.
+The source ledger pins the implementation revisions studied for this edition.
+Performance claims should be accompanied by enough workload, hardware, and
+software detail to reproduce them.

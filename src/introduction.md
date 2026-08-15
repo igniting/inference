@@ -2,19 +2,37 @@
 
 ## Engineering Generative AI from Kernel to Cluster
 
-This is the planning edition of a new, original book about production inference
-systems. Its subject is broader than optimizing a single language model. Modern
-serving systems coordinate heterogeneous model stages, accelerator memory,
-compilers, kernels, distributed state, networks, schedulers, APIs, and
-operational policy under changing workloads.
+A user sends 8,000 prompt tokens to a model and begins waiting. The GPU has
+enough arithmetic capacity to answer quickly. Yet the first token arrives late,
+the stream pauses twice, and a second request with the same long prompt repeats
+nearly all the work.
 
-The book's central model is:
+Nothing in that story is explained by the model alone. The answer depends on a
+scheduler deciding which tokens run, a memory manager finding room for their
+state, kernels moving data through an accelerator, and a router deciding
+whether reusable state is near the next worker. It also depends on what the
+service promised the user. A fast average is little comfort if an interactive
+response stalls every tenth token.
+
+That is the territory of inference systems.
+
+The central idea of this book is simple:
 
 > An inference service turns a workload and a model topology into an execution
-> plan, manages the plan's distributed state, and continuously adapts it using
-> measurements from the production system.
+> plan, manages the plan's distributed state, and adapts it using measurements
+> from the running system.
 
-That gives us six recurring questions:
+The sentence is compact; the machinery is not. A modern service may coordinate
+tokenization, multimodal encoders, autoregressive decoders, diffusion stages,
+accelerator memory, compiled graphs, expert networks, remote caches, and live
+sessions. Improvements in one layer can move the bottleneck into another. A
+larger batch raises throughput until it ruins latency. A remote cache saves
+computation until transfer becomes slower than recomputation. A lower-precision
+model saves memory until an important output changes.
+
+## The six questions
+
+We return to six questions throughout the book:
 
 1. What work arrives, and which service objectives matter?
 2. What computation and persistent state does the model create?
@@ -23,31 +41,39 @@ That gives us six recurring questions:
 5. How should the control plane route, scale, and recover the service?
 6. Which measurements demonstrate useful, correct, and economical output?
 
-## Intended readers
+These questions are more durable than any framework option. vLLM and SGLang
+appear often because their implementations make current design choices
+concrete. They are case studies, not the table of contents. Primary systems
+papers, official hardware and software documentation, and reproducible
+experiments provide the rest of the evidence.
 
-The primary audience is engineers building or operating model-serving systems:
+## Who this is for
+
+The book is written for engineers who build or operate model-serving systems:
 ML systems engineers, performance engineers, distributed-systems engineers,
-and advanced practitioners moving from model APIs into inference
-infrastructure. Readers should be comfortable with Python and basic deep
-learning concepts. Accelerator programming and distributed systems are taught
-as they become necessary.
+and practitioners moving from hosted model APIs into their own infrastructure.
+You should be comfortable reading Python and recognize the broad shape of a
+neural network. Accelerator programming and distributed execution are
+introduced when they become necessary.
 
-## What makes this book different
+You do not need to memorize every kernel or parallelism scheme. The useful
+skill is learning to trace a request: what computes, what moves, what persists,
+what waits, and what evidence would prove an improvement.
 
-The book is organized around durable engineering decisions rather than a
-feature tour of one framework. vLLM and SGLang are important implementation
-studies, alongside primary papers, hardware documentation, and reproducible
-experiments. Their code is used to reveal design trade-offs—not to define a
-framework-specific curriculum or declare a permanent winner.
+## From one request to a fleet
 
-Each chapter is expected to contain:
+Part I establishes the workload, execution, and hardware vocabulary. Part II
+opens a single engine and follows its scheduler, KV cache, kernels, compiled
+graphs, numerical formats, and decoding algorithms. Part III asks what changes
+when state and computation cross accelerator or host boundaries. Part IV
+extends the model to images, audio, video, and reinforcement learning. Part V
+turns the mechanisms into an API, benchmark, operating practice, and economic
+decision.
 
-- a concrete request or system trace;
-- an explicit state and data-movement model;
-- at least one failure mode or misleading optimization;
-- a measurement exercise with reproducible inputs; and
-- implementation notes tied to dated source revisions.
+Each chapter begins from a problem rather than a catalog of features. Most end
+with an experiment or design exercise. Read the explanations first; return to
+the source links when you want to see how a production implementation expresses
+the idea.
 
-The manuscript itself has not begun. The next step is to review the
-[complete outline](outline.md), decide what to cut or combine, and then create
-an evidence brief for every approved chapter.
+The first task is to define success. Chapter 1 begins with a service that looks
+fast on a dashboard and still disappoints its users.
