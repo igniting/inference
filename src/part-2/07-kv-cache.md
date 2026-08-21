@@ -10,6 +10,15 @@ The solution used by modern engines resembles virtual memory. Requests see a
 logical sequence of positions. The engine backs those positions with fixed-size
 physical blocks that do not need to be contiguous.
 
+The resemblance is more than an analogy. Virtual memory solved the same three
+problems: how to let consumers believe in a tidy private range while physical
+storage is fragmented, how to share storage safely between consumers, and how
+to reclaim it without asking anyone's permission at the wrong moment. Every
+mechanism in this chapter — the block table, copy-on-write, reference counts,
+eviction under live readers — has a direct ancestor in operating-system memory
+management, which is useful because fifty years of OS practice tells you where
+the bodies are buried.
+
 ## Visual map
 
 **A block table separates logical sequence order from physical placement.**
@@ -34,6 +43,15 @@ flowchart LR
     R -->|evict index| D["Draining"]
     D -->|reference count zero| F
 ```
+
+The first diagram is the indirection that makes everything else possible:
+logical order is a fiction the kernel resolves through the table, so growth,
+sharing, and release never require moving bytes. The second diagram is the
+discipline that keeps the fiction honest — a block becomes visible to others
+only after its writer is provably finished, and leaves the pool only after its
+last reader is provably gone. The table below names the four moments where
+that discipline is most often violated, and what each violation looks like
+from outside.
 
 | Cache concern | Identity or invariant | Observable signal |
 | --- | --- | --- |
@@ -62,6 +80,30 @@ sequence lengths.
 The [PagedAttention paper](https://arxiv.org/abs/2309.06180) describes this
 virtual-memory-inspired design and the original vLLM implementation.
 
+### Fragmentation, before and after paging
+
+The win is easiest to see by pricing the alternative. Give every request a
+contiguous reservation sized for the 64,000-token maximum. At 320 KiB of state
+per token, each reservation commits about 19.5 GiB regardless of what the
+conversation actually needs — a healthy 8,000-token exchange uses 2.44 GiB of
+it, so roughly eight times the reservation sits idle even before short
+requests are counted. On the deployment Chapter 4 walked, each device of a
+four-way shard owes its quarter of every reservation, about 4.9 GiB against a
+KV budget near 35 GiB: seven such reservations consume the pool, whether or
+not their conversations ever grow. The same budget served fifty-six resident
+conversations when allocation followed actual length — a factor-of-eight
+difference in concurrency, purely reservation policy.
+
+Paging attacks both fragmentation modes at once. Internal waste shrinks to the
+tail of one block — at most fifteen unused positions out of sixteen, under
+five megabytes per sequence and more than three orders of magnitude below the
+contiguous case. External fragmentation stops being a scheduling concern: free memory
+fragmented into scattered single blocks is perfectly usable, because the
+allocator attaches them one at a time. The residual cost is metadata — larger
+block tables crossing the scheduler-to-worker boundary every step — which is
+why block size, the next section's subject, is a genuine trade and not a knob
+to minimize blindly.
+
 ## Choosing a block size
 
 Block size looks like a low-level allocator setting, but it influences the whole
@@ -80,6 +122,28 @@ Backend constraints sometimes narrow the choice. SGLang's current
 documents page-size requirements for several implementations and explains the
 trade-off between kernel performance and prefix-match granularity. The correct
 size is part of an execution plan, not a universal constant.
+
+The interactions run wider than allocation. Chapter 6's prefill chunking
+interacts with block size because a chunk that stops mid-block leaves a
+partially filled block whose publication timing the lifecycle rules govern;
+Chapter 14's cross-node transfers price block size directly, since the
+transfer unit determines how much protocol overhead repeats per hop. When a
+team changes block size, it is quietly renegotiating with the scheduler, the
+kernel, and the transfer layer simultaneously — which is why the setting
+belongs to the execution plan review, not to a config default.
+
+One worked contrast shows how sharply the choice bites. At sixteen-token
+blocks, a 100-token conversation fills seven blocks and wastes at most fifteen
+positions — under five megabytes of tail. At 256-token blocks, the same
+conversation fills one block and abandons 156 positions: about forty-nine
+megabytes of state held for thirty-two megabytes of use, waste exceeding the
+payload. For a chat fleet dominated by short requests, the large block is
+difficult to justify at any batch size; for a deployment of long documents
+where every sequence fills dozens of blocks, the tail is rounding error and
+the smaller tables and kernel-friendly pages win. The block size that
+maximizes reuse granularity is a function of the length distribution the
+service actually serves — one more quantity Chapter 2's workload records
+exist to pin down.
 
 ## A block has a lifecycle
 
@@ -101,6 +165,27 @@ use has finished.
 Reference counts protect ownership. Cache policy decides how long an unowned,
 valid block remains available for reuse. Combining those two ideas risks
 evicting state that a live request still needs.
+
+The distinction matters most at transitions. A block moving from private to
+reusable crosses from “one owner's truth” to “many readers' assumption,” and
+the engine must prove the writer finished — GPU event, stream sync, or
+acknowledged transfer — before flipping the bit in between. Skipping the proof
+works in benchmarks, where steps complete predictably, and fails in production
+exactly when a cancellation, preemption, or stalled transfer makes completion
+order surprising. This is why the lifecycle diagram's middle states exist at
+all: they are the proof obligations, made explicit.
+
+Cancellation exercises every state at once, which is why it makes the best
+test case. The cancelled request's in-flight blocks must stay pinned — not
+published, not freed — until the completion event proves the GPU finished
+writing them; only then may they seal into reusable state or drop back to the
+pool. Engines that release eagerly show a characteristic signature: rare
+garbage tokens in unrelated requests, appearing only under cancellation load,
+because a reallocated address was still being written by a ghost. The
+“deferred-release age” signal in the table above is the operational probe for
+this — how long blocks wait between their request ending and their last use
+provably finishing — and an age that grows with load is an engine telling you
+its proofs are falling behind its execution.
 
 ## Reusing a prefix
 
@@ -127,10 +212,56 @@ contains prefix matching, insertion, request caching, and eviction. vLLM's
 [`kv_cache_manager.py`](https://github.com/vllm-project/vllm/blob/5cecfc01375052698823fc401e31518fb32a981e/vllm/v1/core/kv_cache_manager.py)
 coordinates request allocation and cached-block lookup.
 
+Read the two implementations and the identity rules from earlier in this
+section stop being abstract. In SGLang's `RadixCache`, the lookup key is a
+`RadixKey` carrying the token IDs plus an optional `extra_key`, and the
+`match_prefix` docstring states the namespace policy outright: entries with
+identical leading tokens but different `extra_key` values are “kept disjoint
+and never share prefix nodes,” which is how LoRA adapters, sampling salts, and
+cache versions partition the tree without changing the token content. Matching
+is page-aligned — keys are truncated to a multiple of `page_size` before
+lookup, so reuse boundaries obey the allocator's granularity — and when a
+match ends inside a stored segment, the method splits that node once to expose
+a precise boundary, a structural refinement that duplicates no data. The same
+walk refreshes access timestamps, which is how lookup feeds the configured
+eviction strategy: using a prefix is itself a cache-policy event. One more
+detail shows how deep identity goes: the key may be converted to a bigram
+view when speculative decoding is active, because draft-token patterns change
+what a reusable segment means — even the matching representation bends to the
+execution mode.
+
+vLLM's `get_computed_blocks` enforces the complementary rule on the consumer
+side: returned cached blocks must be full, and `max_cache_hit_length` is set to
+`request.num_tokens - 1`. The comment explains why — if every prompt token hit
+the cache, there would be nothing left to run through the model, and no logits
+would exist — so the last token is always recomputed. Because allocation is
+block-aligned, that single recomputed token can drag a whole block with it; the
+comment flags this honestly as a known inefficiency. The same function shows
+multi-cache realities surfacing in the interface: the coordinator finds the
+longest hit per state group, and when sparse-retention groups such as Mamba or
+sliding-window layers lag behind the full-attention groups, the result carries
+a `shared_prefix_boundary` marking the junction all groups can agree on.
+
+Allocation closes the loop in `allocate_slots`, whose docstring draws the
+block layout of a request as `<comp> | <new_comp> | <ext_comp> | <new> |
+<lookahead>` — already-computed, newly-hit, externally-delivered, to-be-run,
+and speculative-reserved regions laid end to end. Two of its parameters are
+admission policy hiding inside an allocator: `full_sequence_must_fit` forces
+the whole sequence to fit now, closing the loophole where chunked prefill
+checks only whether the first chunk fits and strands the rest; and
+`reserved_blocks` keeps free blocks aside for in-flight sequences, so an
+asynchronous KV load cannot consume pages a prefilling request is relying on.
+The boundary between “memory manager” and “scheduler” runs straight through
+this signature — which is why Chapter 6 ended by promising this chapter.
+
 ## Sharing and copy-on-write
 
 Parallel samples or beam candidates can share the blocks that represent their
 common prompt. When they generate different tokens, their new state diverges.
+The request shape that triggers this is ordinary: one API call asking for four
+completions becomes, at Chapter 5's boundary, four execution requests whose
+prefixes are identical by construction — sharing is not an optimization the
+caller requests but a consequence of what the engine notices.
 
 Full, immutable blocks can remain shared. If two sequences share a partially
 filled block and one needs to write into it, that sequence receives a private
@@ -141,11 +272,41 @@ The same branching appears in multi-turn conversations. A shared system prompt
 may be extremely valuable; thousands of rare branches may not be. The cache
 needs an eviction policy, not merely the ability to retain everything.
 
+### What branching actually costs
+
+The savings are easiest to trust with numbers. Take four parallel samples of
+one prompt — 1,000 tokens of shared context. Without sharing, four private
+sequences hold `4 × 1,000 × 320 KiB ≈ 1.22 GiB`; with full blocks shared,
+the pool holds one copy of `313 MiB`, and the three siblings are pure
+saved capacity. Divergence starts costing only when children write: the first
+token each child emits lands in the shared partial tail, which must be
+copied — sixteen positions, about five megabytes per child, once. From there
+each child pays only for what makes it different: after fifty divergent
+tokens, a child owns roughly four extra blocks plus the copied tail, tens of
+megabytes against the original hundreds. The economics that make beam search
+and best-of-n sampling affordable are exactly these: share everything
+immutable, pay only at divergence, and let reference counts settle who still
+needs each block.
+
+Copy-on-write also interacts with the identity rules in a way worth noticing:
+a branch that copies its tail inherits the parent's provenance up to the fork
+point and owns everything after. If the branch later changes adapter mid-life
+— rare, but tools do this — the inherited portion stays valid only under the
+original namespace, so the engine must either forbid the change or re-key the
+branch's identity from the fork point onward. Systems that skip this check
+produce caches that serve correct-looking state assembled from two
+incompatible worlds.
+
 ## A hit rate can be misleading
 
 Least-recently-used eviction is a reasonable starting point. It does not know
 how expensive a prefix is to recompute, how likely it is to return, how many
-bytes it occupies, or whether another tier already holds a copy.
+bytes it occupies, or whether another tier already holds a copy. Even its
+central quantity needs interpretation in a tree: when a shared system prompt
+sits at the root of thousands of branches, every hit below it touches the
+root, and naive recency bookkeeping makes the root permanently immortal while
+the leaves — where workload change actually shows first — evict first. The
+clock is part of the policy, not an implementation detail beneath it.
 
 Imagine two cached prefixes. One contains 10,000 tokens and is reused once an
 hour. The other contains 100 tokens and is reused every second. A raw request
@@ -155,6 +316,38 @@ one. Saved work per byte may produce a third answer.
 Useful cache metrics include matched tokens, compute time avoided, bytes held,
 bytes transferred, eviction churn, and the effect on request latency. Hit rate
 alone is not enough.
+
+### Pricing two prefixes
+
+Give the pair numbers. The 10,000-token system prompt saves about `0.035 ms ×
+10,000 = 350 ms` of prefill work each time it hits; at once an hour, that is
+350 milliseconds of GPU time avoided per hour, bought with `10,000 × 320 KiB
+≈ 3.05 GiB` of residency. The 100-token preamble saves 3.5 ms per hit, but at
+one hit per second it avoids about 12.6 seconds of prefill per hour while
+occupying barely 31 MiB. Measured per byte, the small prefix is thousands of
+times more productive — yet a deployment with spare memory should absolutely
+keep the big one, because 3.05 GiB sitting idle in an uncongested pool costs
+nothing and buys 350 ms off every conversation start.
+
+The ranking flips exactly when memory becomes scarce. Under pressure, those
+gigabytes have an opportunity cost — Chapter 4's admission walk priced a
+rank-share of long sequences at roughly 0.61 GiB apiece — and evicting the
+hourly giant to admit another resident conversation may raise goodput even
+though the giant's individual hits feel valuable. That is the real lesson of
+the misleading hit rate: cache value is a function of current scarcity, not a
+property of the entry, and any policy fixed at insertion time will eventually
+be answering yesterday's question.
+
+A cost-aware policy falls out of the same framing without much ceremony.
+Score each cached prefix by its expected savings rate — reuse probability ×
+tokens matched × per-token prefill cost, divided by bytes held — refresh the
+probability from observed hits, and evict lowest score first when the pool
+needs blocks. The formula's inputs are all things Chapter 2 said to record:
+matched tokens, hit frequency, bytes. Two refinements matter in practice:
+scores must decay, because a workload shift makes yesterday's hot prefix
+today's dead weight; and admission needs the same test as eviction, or the
+pool fills with newly inserted prefixes that a scoring pass would immediately
+evict — churn that costs metadata work on every step for zero reuse.
 
 ## Modern models have more than one cache shape
 
@@ -173,6 +366,17 @@ and the cache coordinator. SGLang has separate memory-pool and radix-cache paths
 for sliding-window, Mamba, and unified layouts. The names will change; the
 underlying requirement comes from the model.
 
+The coordination cost is subtle: a mixed-model hit is the *minimum* across
+groups, so one lagging layer type silently truncates reuse for everyone. A
+model whose sliding-window group retains four thousand positions caps every
+hit there, even when the full-attention groups hold thirty-two thousand
+reusable positions — the window group's oldest state no longer exists, and
+no amount of caching in the other groups restores it. An
+engine that reports prefix hits only from the largest group will flatter
+itself while requests quietly recompute sliding-window state the report
+claimed was cached. Honest multi-group metrics count the junction — the
+boundary all groups reached — not the best single group.
+
 ## Worked example: publication before reuse
 
 A request produces a final partial block and is cancelled while the GPU write
@@ -184,6 +388,15 @@ Keep the block private and pinned until the completion event. Then either seal
 and publish it under the cache policy or discard it. A branch shares sealed
 full blocks but copies a partial tail before writing. Eviction removes lookup
 visibility first and frees storage only after references reach zero.
+
+The two hazards name the two proof obligations precisely. A reader observing
+incomplete data is a torn-state failure — the block became visible before its
+writer finished — and the completion event is the proof that prevents it. An
+address being reallocated under a live writer is a use-after-free failure —
+the block returned to the pool before its last device use ended — and the
+pinned-until-event rule prevents that one. Every lifecycle state in this
+chapter exists to discharge one of these two obligations, and any shortcut
+that skips a proof is betting that the race it opens never wins.
 
 Content identity also needs a boundary. If token 511 changes, at most the first
 511 tokens match. A different adapter or model version invalidates the produced
