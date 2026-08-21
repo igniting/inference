@@ -52,8 +52,8 @@ schema, regular expression, or other allowed-output state.
 **Context parallelism (CP)** — Partitioning sequence positions or context work
 across ranks. The exact algorithm must be stated.
 
-**Continuous batching** — Changing batch membership between inference
-iterations so completed sequences leave and waiting sequences enter.
+**Continuous batching** — Changing batch membership between engine steps
+so completed sequences leave and waiting sequences enter.
 
 **Control plane** — Components that place, route, scale, and recover work across
 engines rather than executing the current model step.

@@ -74,14 +74,14 @@ tokens -> transformer blocks -> logits -> sampling -> next token
    +-------------------------------------------------+
 ```
 
-The next iteration depends on the token selected in the previous one. This is
+The next step depends on the token selected in the previous one. This is
 the serial dependency behind decode latency. A server can process many
 sequences together, but one sequence cannot generate its tenth new token before
 it knows the ninth. Parallelism across sequences is free; parallelism within
 one sequence's decode does not exist unless a later mechanism, speculation,
 manufactures it.
 
-The loop also fixes what the engine touches every step. Each iteration reads
+The loop also fixes what the engine touches every step. Each step reads
 the model's weights, reads the attention state accumulated so far, computes
 one position's worth of arithmetic per active sequence, writes one new entry
 per layer into that state, and emits one logits vector per sequence. Those
@@ -388,7 +388,7 @@ partial progress to show a waiting caller.
 An image-generation pipeline commonly contains a text encoder, a denoising
 network, a scheduler that chooses noise levels, and a decoder that turns a
 latent representation into pixels. The denoising network runs many times —
-often twenty to fifty iterations — with each pass refining the same latent.
+often twenty to fifty denoising steps — with each pass refining the same latent.
 
 Unlike an autoregressive sequence, a diffusion request often advances all
 spatial positions together. Its latent state may keep a stable shape across
@@ -396,11 +396,11 @@ steps, which makes its per-step work predictable in a way decode is not.
 Requests can share a batch when their resolution, step, conditioning,
 and backend requirements are compatible. Some systems cache repeated work
 between nearby denoising steps, exploiting the fact that consecutive
-iterations change the latent only slightly.
+passes change the latent only slightly.
 
 The lesson is broader than diffusion: an inference engine should model stages,
 dependencies, and state rather than assume that every request emits one token
-per iteration. An engine designed around the decoder loop alone will force
+per step. An engine designed around the decoder loop alone will force
 every other topology through shapes that fit it badly.
 
 ## From model topology to serving topology

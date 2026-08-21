@@ -318,7 +318,7 @@ drawing, invisible in a per-link bandwidth specification.
 The GPU runs the model, but the CPU may parse requests, tokenize text,
 preprocess media, make schedules, prepare metadata, coordinate transfers, and
 turn outputs into stream events. Once GPU steps become short, Python work or a
-host synchronization can take a large fraction of each iteration.
+host synchronization can take a large fraction of each engine step.
 
 A declared-assumption arithmetic makes the exposure vivid. Suppose an engine
 step takes six milliseconds on the device and the host needs four more per
