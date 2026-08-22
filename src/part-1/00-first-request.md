@@ -223,6 +223,20 @@ hardware with nothing else to do.
 
 ## Following the bytes
 
+**The request owns memory at three different lifetimes.**
+
+```mermaid
+flowchart TB
+    A["Server lifetime"] --> B["Model weights"]
+    C["Request lifetime"] --> D["Growing KV cache"]
+    E["Step lifetime"] --> F["Activations"]
+    E --> G["Logits"]
+    B --> H["Read every prefill and decode pass"]
+    D --> I["Released when the request ends"]
+    F --> J["Reused after each step"]
+    G --> J
+```
+
 A summary of where memory goes during this single request:
 
 | Object | Size | Lifetime |

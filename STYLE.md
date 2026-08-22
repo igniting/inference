@@ -35,6 +35,22 @@ pedagogical qualities, not language to imitate.
 - Vary sentence length, but keep technical claims unambiguous.
 - Use analogies sparingly and carry them only as far as they remain accurate.
 
+## Visual system
+
+- Use the single light reading theme. Signal blue (`#2458d3`) is the only
+  chromatic accent; use its tints for emphasis, never a competing hue.
+- Treat diagrams and tables as technical plates: the same border, radius,
+  spacing, typography, and signal-blue hierarchy should connect them.
+- Wrap and balance diagram labels before allowing nodes to grow. Preserve
+  readable node type in dense horizontal diagrams by panning the plate instead
+  of shrinking the entire system to fit.
+- Reserve Literata for sustained reading, Inter for hierarchy and navigation,
+  and JetBrains Mono for code, measurements, and structural labels.
+- Use color to express emphasis and flow, not to assign undocumented meaning.
+  A diagram that needs semantic categories must label them explicitly.
+- Preserve comfortable prose width. Diagrams and tables may extend slightly
+  beyond it when extra width materially improves comprehension.
+
 ## Originality
 
 - Do not copy or closely paraphrase the reference book.

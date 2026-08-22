@@ -8,15 +8,16 @@ systems—including vLLM and SGLang—without reproducing the structure or prose
 of any existing book.
 
 Read the published book at **[igniting.github.io/inference](https://igniting.github.io/inference/)**.
-The manuscript contains 24 chapters across five parts, plus practical
+The manuscript contains 27 chapters across five parts, plus practical
 appendices, a glossary, a source ledger, and a complete
 [worked-solutions manual](src/appendices/g-worked-solutions.md). Its research
 and originality rules are documented in the
 [research policy](src/research-method.md).
 
-Every chapter includes two block diagrams and a compact comparison table. The
-diagram source is versioned beside the prose so architectural explanations and
-their visuals change together.
+Every chapter includes at least two block diagrams and a compact comparison
+table. The diagram source is versioned beside the prose so architectural
+explanations and their visuals change together. A single signal-blue visual
+system unifies the prose, navigation, code, diagrams, and tables.
 
 ## Read locally
 

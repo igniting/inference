@@ -15,7 +15,7 @@ site-url = "/inference/"
 additional-css = ["theme/inference.css"]
 additional-js = ["theme/mermaid-init.js"]
 default-theme = "light"
-preferred-dark-theme = "navy"
+preferred-dark-theme = "light"
 no-section-label = true
 
 [output.html.search]

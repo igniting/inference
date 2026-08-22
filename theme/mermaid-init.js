@@ -2,8 +2,7 @@
  *
  * Loads the vendored Mermaid build (no network dependency), renders every
  * ```mermaid block as a numbered figure whose caption is the bold thesis
- * line above it, applies the book's component/movement palette natively,
- * and re-renders when the reading theme toggles between light and dark.
+ * line above it, and applies the book's single signal-blue palette natively.
  * Also upgrades chapter openers with part-aware eyebrows and styles the
  * part-divider pages.
  */
@@ -11,8 +10,23 @@
 (function () {
   "use strict";
 
-  var DARK_THEMES = ["navy", "ayu", "coal"];
   var BOOK_LABEL = "Inference Systems";
+  var THEME_CLASSES = ["rust", "coal", "navy", "ayu"];
+
+  function enforceSingleTheme() {
+    [document.documentElement, document.body].forEach(function (root) {
+      if (!root || !root.classList) return;
+      THEME_CLASSES.forEach(function (name) { root.classList.remove(name); });
+      root.classList.add("light");
+    });
+    try {
+      localStorage.setItem("mdbook-theme", "light");
+    } catch (_error) {
+      /* Storage can be unavailable in hardened or private contexts. */
+    }
+  }
+
+  enforceSingleTheme();
 
   /* mdBook copies non-markdown files from src/ verbatim, so the vendored
      bundle lives at <book-root>/assets/vendor/. path_to_root is mdBook's
@@ -27,21 +41,6 @@
       .getPropertyValue(name)
       .trim();
     return value || fallback;
-  }
-
-  function rootHasAny(classNames) {
-    var roots = [document.documentElement, document.body];
-    for (var i = 0; i < roots.length; i++) {
-      if (!roots[i] || !roots[i].classList) continue;
-      for (var j = 0; j < classNames.length; j++) {
-        if (roots[i].classList.contains(classNames[j])) return true;
-      }
-    }
-    return false;
-  }
-
-  function isDark() {
-    return rootHasAny(DARK_THEMES);
   }
 
   /* ------------------------------------------------------------------ */
@@ -128,6 +127,48 @@
   /* ------------------------------------------------------------------ */
 
   var figures = [];
+  var LABEL_MIN_CHARS = 14;
+  var LABEL_MAX_CHARS = 22;
+
+  function balanceLabel(label, maxChars, minChars) {
+    maxChars = maxChars || LABEL_MAX_CHARS;
+    minChars = minChars || LABEL_MIN_CHARS;
+    var words = label.trim().split(/\s+/);
+    var lines = [];
+    var line = "";
+
+    words.forEach(function (word) {
+      var candidate = line ? line + " " + word : word;
+      if (line && candidate.length > maxChars) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = candidate;
+      }
+    });
+    if (line) lines.push(line);
+
+    if (lines.length === 1 && lines[0].length < minChars) {
+      var missing = minChars - lines[0].length;
+      var before = Math.floor(missing / 2);
+      var after = missing - before;
+      lines[0] = "\u00a0".repeat(before) + lines[0] + "\u00a0".repeat(after);
+    }
+
+    return "`" + lines.join("\n") + "`";
+  }
+
+  function normalizeDiagramSource(source) {
+    return source.replace(
+      /(\b[A-Za-z][\w-]*)(\[|\{)"([^"]+)"(\]|\})/g,
+      function (_match, id, open, label, close) {
+        var balanced = open === "{"
+          ? balanceLabel(label, 15, 12)
+          : balanceLabel(label);
+        return id + open + '"' + balanced + '"' + close;
+      }
+    );
+  }
 
   function buildFigures() {
     var blocks = document.querySelectorAll("pre > code.language-mermaid");
@@ -156,7 +197,9 @@
       box.className = "diagram-box";
       box.setAttribute("role", "img");
       box.setAttribute("aria-label", caption || "System block diagram");
-      box.textContent = code.textContent;
+      var originalSource = code.textContent;
+      var renderSource = normalizeDiagramSource(originalSource);
+      box.textContent = renderSource;
 
       var cap = document.createElement("figcaption");
       var labelSpan = document.createElement("span");
@@ -173,7 +216,12 @@
       if (prev && prev.tagName === "P" && caption !== null) {
         prev.remove();
       }
-      figures.push({ box: box, source: code.textContent });
+      figures.push({
+        box: box,
+        figure: figure,
+        originalSource: originalSource,
+        renderSource: renderSource
+      });
     });
   }
 
@@ -181,40 +229,40 @@
   /* Rendering                                                           */
   /* ------------------------------------------------------------------ */
 
-  var rendering = false;
-  var pendingTheme = null;
-
-  function themeConfig(dark) {
+  function themeConfig() {
     return {
       startOnLoad: false,
       securityLevel: "strict",
       theme: "base",
-      darkMode: dark,
+      darkMode: false,
       fontFamily: "'Inter', system-ui, sans-serif",
       themeVariables: {
         fontFamily: "'Inter', system-ui, sans-serif",
         fontSize: "13.5px",
         primaryColor: cssVar("--surface-raised", "#ffffff"),
-        primaryTextColor: cssVar("--fg", "#18202d"),
-        primaryBorderColor: cssVar("--trace-blue", "#245dcc"),
-        lineColor: cssVar("--state-teal", "#087e78"),
-        textColor: cssVar("--fg", "#18202d"),
-        titleColor: cssVar("--fg", "#18202d"),
+        primaryTextColor: cssVar("--fg", "#172033"),
+        primaryBorderColor: cssVar("--signal", "#2458d3"),
+        lineColor: cssVar("--signal", "#2458d3"),
+        textColor: cssVar("--fg", "#172033"),
+        titleColor: cssVar("--fg", "#172033"),
         edgeLabelBackground: cssVar("--surface-raised", "#ffffff"),
         clusterBkg: "transparent",
-        clusterBorder: cssVar("--table-border-color", "#d8dee8"),
+        clusterBorder: cssVar("--table-border-color", "#d9e1f0"),
         mainBkg: cssVar("--surface-raised", "#ffffff"),
-        nodeBorder: cssVar("--trace-blue", "#245dcc"),
-        nodeTextColor: cssVar("--fg", "#18202d"),
-        arrowheadColor: cssVar("--state-teal", "#087e78")
+        nodeBorder: cssVar("--signal", "#2458d3"),
+        nodeTextColor: cssVar("--fg", "#172033"),
+        arrowheadColor: cssVar("--signal", "#2458d3")
       },
       flowchart: {
-        curve: "basis",
+        curve: "stepAfter",
+        diagramPadding: 8,
         htmlLabels: false,
-        nodeSpacing: 22,
-        rankSpacing: 40,
+        inheritDir: true,
+        nodeSpacing: 34,
+        rankSpacing: 48,
         useMaxWidth: true,
-        padding: 6
+        padding: 12,
+        wrappingWidth: 154
       }
     };
   }
@@ -229,42 +277,51 @@
       item.box.classList.add("diagram-error");
       item.box.removeAttribute("role");
       item.box.removeAttribute("aria-label");
-      item.box.textContent = item.source;
+      item.box.textContent = item.originalSource;
     });
   }
 
-  function renderAll(dark) {
+  function classifyFigures() {
+    figures.forEach(function (item) {
+      var svg = item.box.querySelector("svg");
+      if (!svg) return;
+      var viewBox = (svg.getAttribute("viewBox") || "")
+        .trim()
+        .split(/\s+/)
+        .map(Number);
+      var aspect = viewBox.length === 4 && viewBox[3] > 0
+        ? viewBox[2] / viewBox[3]
+        : 1;
+      var nodes = item.box.querySelectorAll(".node").length;
+      var isWide = nodes >= 5 && aspect >= 4;
+      var isPannable = isWide || window.matchMedia("(max-width: 700px)").matches;
+      item.figure.classList.toggle("diagram-wide", isWide);
+      item.figure.classList.toggle("diagram-pannable", isPannable);
+      if (isPannable && !item.figure.querySelector(".diagram-pan-hint")) {
+        var hint = document.createElement("span");
+        hint.className = "diagram-pan-hint";
+        hint.setAttribute("aria-hidden", "true");
+        hint.textContent = "Pan diagram →";
+        item.figure.appendChild(hint);
+      }
+      if (isWide) {
+        var naturalWidth = Math.min(1200, Math.max(960, viewBox[2]));
+        item.figure.style.setProperty(
+          "--diagram-min-width",
+          Math.round(naturalWidth) + "px"
+        );
+      }
+    });
+  }
+
+  function renderAll() {
     if (!figures.length) return Promise.resolve();
-    if (rendering) {
-      pendingTheme = dark;
-      return Promise.resolve();
-    }
-    rendering = true;
-    window.mermaid.initialize(themeConfig(dark));
+    window.mermaid.initialize(themeConfig());
     return renderBoxes(figures.map(function (item) { return item.box; }))
+      .then(classifyFigures)
       .catch(function (error) {
         failFigures("Unable to render block diagrams: " + error);
-      })
-      .then(function () {
-        rendering = false;
-        if (pendingTheme !== null && pendingTheme !== dark) {
-          var next = pendingTheme;
-          pendingTheme = null;
-          rerenderFor(next);
-        } else {
-          pendingTheme = null;
-        }
       });
-  }
-
-  function rerenderFor(dark) {
-    figures.forEach(function (item) {
-      /* mermaid marks processed nodes and skips them on later runs */
-      item.box.removeAttribute("data-processed");
-      item.box.classList.remove("diagram-error");
-      item.box.textContent = item.source;
-    });
-    return renderAll(dark);
   }
 
   function loadMermaid() {
@@ -360,7 +417,7 @@
   }
 
   function styleSidebar() {
-    /* Divider pages repeat the part title; render them as sublabels. */
+    /* Part-divider links replace mdBook's duplicate, non-link part labels. */
     document.querySelectorAll(".sidebar a").forEach(function (a) {
       var href = a.getAttribute("href") || "";
       if (/^(\.\.\/)*(part-\d+\/)?index\.html$/.test(href.split("#")[0]) ||
@@ -500,6 +557,7 @@
   /* ------------------------------------------------------------------ */
 
   document.addEventListener("DOMContentLoaded", function () {
+    enforceSingleTheme();
     addSkipLink();
     enhanceOpeners();
     buildFigures();
@@ -514,29 +572,10 @@
 
     loadMermaid()
       .then(function () {
-        return renderAll(isDark());
+        return renderAll();
       })
       .catch(function (error) {
         failFigures(error && error.message ? error.message : String(error));
       });
-
-    var lastDark = isDark();
-    var observer = new MutationObserver(function () {
-      var dark = isDark();
-      if (dark !== lastDark) {
-        lastDark = dark;
-        if (window.mermaid) rerenderFor(dark);
-      }
-    });
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"]
-    });
-    if (document.body) {
-      observer.observe(document.body, {
-        attributes: true,
-        attributeFilter: ["class"]
-      });
-    }
   });
 })();
