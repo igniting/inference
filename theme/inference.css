@@ -304,24 +304,12 @@ main {
 }
 
 .content main h2 {
-  position: relative;
-  margin-top: 2.8rem;
-  margin-bottom: 0.75rem;
-  padding-top: 0.25rem;
+  margin-top: 3rem;
+  margin-bottom: 0.8rem;
   font-size: 25px;
   font-weight: 650;
   letter-spacing: -0.025em;
   line-height: 1.2;
-}
-
-.content main h2::before {
-  position: absolute;
-  top: -0.7rem;
-  left: 0;
-  width: 58px;
-  height: 2px;
-  background: var(--signal);
-  content: "";
 }
 
 .content main h3 {
