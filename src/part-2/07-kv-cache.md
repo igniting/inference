@@ -444,6 +444,47 @@ Content identity also needs a boundary. If token 511 changes, at most the first
 state even when token IDs are identical. Tenant policy may forbid otherwise
 valid cross-tenant reuse.
 
+## Quick KV budget worksheet
+
+Use this worksheet to calculate your deployment's KV memory budget.
+Replace the Atlas numbers with your model's actual constants.
+
+```text
+Step 1: Weight memory per rank
+  weights = 140 GB (Atlas BF16) / TP_degree
+  Example: 140 / 4 = 35 GB per rank
+
+Step 2: Non-KV overhead per rank
+  activations ≈ 0.5–1.5 GB (depends on batch size and model)
+  graph pool  ≈ 0.5–2.0 GB (depends on captured buckets)
+  framework   ≈ 0.5–1.0 GB
+  Subtotal:   ≈ 1.5–4.5 GB
+
+Step 3: Available KV memory per rank
+  available = GPU_memory - weights - overhead
+  Example: 80 - 35 - 3.0 = 42 GB per rank
+
+Step 4: Maximum tokens in KV cache
+  KV per token per rank = KV_bytes_per_token / TP_degree
+  Example: 320 KiB / 4 = 80 KiB per rank per token
+  Max tokens = available / (KV per token per rank)
+  Example: 42 GB / 80 KiB ≈ 550,000 tokens
+
+Step 5: Maximum concurrent sequences
+  max_sequences = max_tokens / average_context_length
+  Example at 4K context: 550,000 / 4,000 = 137 sequences
+  Example at 32K context: 550,000 / 32,000 = 17 sequences
+
+Step 6: Set max-num-seqs to 85% of Step 5
+  Example at 4K: 137 × 0.85 ≈ 116
+  Example at 32K: 17 × 0.85 ≈ 14
+```
+
+The 85% margin prevents preemption storms. If your actual traffic has
+variable context lengths, use your p90 context length in Step 5. The
+decision checklist in Appendix D2 walks this calculation with additional
+considerations for adapters, speculative decoding, and quantized KV.
+
 ## Practice: construct a cache safety matrix
 
 Starting from one 512-token prefix, vary exactly one of token content, adapter,

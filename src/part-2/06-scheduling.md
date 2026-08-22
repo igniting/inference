@@ -416,6 +416,23 @@ deployment picks its limit exactly this way — from the latency it owes its
 decoders and the prefill rate it must sustain — and then defends the choice
 with a test that fails when someone raises the limit to chase throughput.
 
+## Common scheduling mistakes in production
+
+These are the problems Chapter 22b's debugging walkthroughs trace back to
+scheduling configuration most often:
+
+| Mistake | Symptom | Fix |
+| --- | --- | --- |
+| `max-num-seqs` too high for available KV | Preemption storms, TTFT spikes | Calculate KV budget (Ch. 7), set to 85% occupancy |
+| No chunk budget or chunk budget too large | ITL spikes when long prompts arrive | Set `--max-num-batched-tokens` to 512–2048 |
+| Chunk budget too small | TTFT increases, prefill throughput drops | Measure prefill rate; increase until ITL p99 is met |
+| No priority differentiation | Low-priority batch jobs block interactive | Use priority classes with aging to prevent starvation |
+| Admission only at the load balancer | Engine overloads despite balancer limits | Engine-side admission using live KV and queue state |
+
+Each fix has a corresponding measurement in Chapter 22's methodology.
+The scheduling chapter's worked example above demonstrates the first
+three directly.
+
 ## Practice: implement and explain a schedule
 
 Simulate A `(arrival 0, prefill 24, output 4)`, B `(0, 4, 8)`, high-priority C

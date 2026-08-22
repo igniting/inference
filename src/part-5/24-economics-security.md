@@ -445,6 +445,8 @@ that cost changes. The worked ADR is in
 A sound architecture is not the answer to one benchmark. It is a decision whose
 assumptions and failure modes are visible.
 
-That completes the main text. The appendices provide notation, reference
-tables, reproducibility templates, deployment patterns, terminology, and the
-source ledger behind this edition.
+That completes the main text. The appendices provide notation, hardware
+references and a portability guide for non-NVIDIA platforms, reproducibility
+templates, deployment patterns, decision checklists for common practitioner
+tasks, terminology, source provenance, worked solutions, and a phased
+optimization migration guide for teams running vLLM or SGLang today.
