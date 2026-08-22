@@ -62,18 +62,30 @@ what waits, and what evidence would prove an improvement.
 
 ## From one request to a fleet
 
+Chapter 0 follows a single request through a single GPU — tokenization,
+prefill, decode, and streaming — with concrete numbers on a real model. It is
+the anchor: every later chapter adds complexity to the steps it introduces.
+
 Part I establishes the workload, execution, and hardware vocabulary. Part II
 opens a single engine and follows its scheduler, KV cache, kernels, compiled
-graphs, numerical formats, and decoding algorithms. Part III asks what changes
-when state and computation cross accelerator or host boundaries. Part IV
-extends the model to images, audio, video, and reinforcement learning. Part V
-turns the mechanisms into an API, benchmark, operating practice, and economic
-decision.
+graphs, numerical formats, decoding algorithms, and multi-tenant adapter
+serving. Part III asks what changes when state and computation cross
+accelerator or host boundaries. Part IV extends the model to images, audio,
+video, and reinforcement learning. Part V turns the mechanisms into an API,
+benchmark, debugging method, operating practice, and economic decision.
+
+The appendices provide notation, hardware references and portability guides,
+benchmark templates, deployment patterns, decision checklists, terminology,
+source provenance, worked solutions, and a phased optimization migration guide.
 
 Each chapter begins from a problem rather than a catalog of features. Most end
 with an experiment or design exercise. Read the explanations first; return to
 the source links when you want to see how a production implementation expresses
 the idea.
+
+If you are running an inference service today and need to solve a specific
+problem, the [How to Read](how-to-read.md) page includes a problem-oriented
+navigation table.
 
 The first task is to define success. Chapter 1 begins with a service that looks
 fast on a dashboard and still disappoints its users.

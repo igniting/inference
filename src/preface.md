@@ -77,6 +77,14 @@ are introduced through state ownership and data movement, then tied back to
 observable behavior. When a claim depends on a particular repository revision,
 the text says so.
 
+If you are new to inference, Chapter 0 follows one request through one GPU
+before any abstraction layer arrives. If you already operate an inference
+service and need to solve a specific problem, the problem-oriented table in
+[How to Read This Book](how-to-read.md) points you to the right chapters.
+If you want a systematic optimization plan, Appendix H walks each engine
+tuning in the order you should evaluate it, from low-risk configuration
+changes to architecture decisions.
+
 You do not need to memorize every acronym. You should finish able to draw the
 critical path of an unfamiliar inference system, locate its queues and state,
 predict its likely bottleneck, and design a measurement that can prove you

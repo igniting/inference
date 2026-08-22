@@ -360,6 +360,25 @@ Each metric earns its place by deciding something:
 | eviction churn by tier | whether thresholds are set against real reuse delays |
 | latency after hits vs misses | whether hits actually help once queueing is counted |
 
+## Quick reference: when to add each tier
+
+Before investing in cache infrastructure, check whether simpler
+alternatives solve the problem. This table helps decide.
+
+| Situation | First action | Add a tier if |
+| --- | --- | --- |
+| Users repeat the same system prompt | Enable local prefix caching (Ch. 7) | Hit rate plateaus below 50% across replicas |
+| Documents are queried multiple times | Cache-aware routing (Ch. 16) | Document popularity is too uniform for affinity |
+| KV eviction is frequent under load | Right-size `max-num-seqs` first | Eviction remains high after KV budget tuning |
+| Session state spans multiple turns | Session affinity routing | Sessions outlive replica restarts |
+| Multi-replica fleet, no prefix sharing | Start with cache-aware routing | Routing cannot cover the overlap pattern |
+| Long documents dominate cost | Evaluate host-memory tier | Transfer latency < recompute time (measure!) |
+
+The general rule: local prefix caching and cache-aware routing cover the
+majority of reuse value with minimal complexity. Add host-memory and remote
+tiers only when measured cross-replica overlap justifies the publication
+protocol and transfer cost.
+
 ## Worked example: a hit worth 110 ms
 
 A 1-GiB prefix avoids 180 ms of prefill and takes 70 ms to load. Its gross
