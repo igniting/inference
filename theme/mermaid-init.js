@@ -359,6 +359,17 @@
     });
   }
 
+  function styleSidebar() {
+    /* Divider pages repeat the part title; render them as sublabels. */
+    document.querySelectorAll(".sidebar a").forEach(function (a) {
+      var href = a.getAttribute("href") || "";
+      if (/^(\.\.\/)*(part-\d+\/)?index\.html$/.test(href.split("#")[0]) ||
+          /part-\d+\/index\.html$/.test(href)) {
+        a.classList.add("divider-link");
+      }
+    });
+  }
+
   function buildPager() {
     var main = document.querySelector(".content main");
     if (!main || main.dataset.pager === "done") return;
@@ -478,6 +489,7 @@
   document.addEventListener("DOMContentLoaded", function () {
     enhanceOpeners();
     buildFigures();
+    styleSidebar();
     enhanceCrossReferences();
     buildPager();
     initRunningHead();

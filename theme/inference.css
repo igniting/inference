@@ -217,6 +217,20 @@ body {
   text-transform: uppercase;
 }
 
+.sidebar a.divider-link {
+  color: var(--state-teal);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.sidebar a.divider-link.active {
+  border-left-color: var(--state-teal);
+  color: var(--state-teal);
+}
+
 .content main {
   padding-block: 54px 96px;
 }
