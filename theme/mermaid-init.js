@@ -482,11 +482,25 @@
     });
   }
 
+  function addSkipLink() {
+    if (document.querySelector(".skip-link")) return;
+    var main = document.querySelector("main");
+    if (!main) return;
+    if (!main.id) main.id = "content-main";
+    main.setAttribute("tabindex", "-1");
+    var skip = document.createElement("a");
+    skip.className = "skip-link";
+    skip.href = "#" + main.id;
+    skip.textContent = "Skip to content";
+    document.body.insertBefore(skip, document.body.firstChild);
+  }
+
   /* ------------------------------------------------------------------ */
   /* Boot                                                                */
   /* ------------------------------------------------------------------ */
 
   document.addEventListener("DOMContentLoaded", function () {
+    addSkipLink();
     enhanceOpeners();
     buildFigures();
     styleSidebar();

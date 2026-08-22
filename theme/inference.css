@@ -570,6 +570,30 @@ main hr {
 
 /* Reading chrome ----------------------------------------------------- */
 
+.skip-link {
+  position: fixed;
+  top: 10px;
+  left: 12px;
+  z-index: 100;
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  background: var(--trace-blue);
+  color: #ffffff;
+  font-family: var(--utility-font);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-260%);
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
+main:focus {
+  outline: none;
+}
+
 body {
   hanging-punctuation: first last;
 }
