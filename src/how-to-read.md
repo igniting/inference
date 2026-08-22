@@ -23,7 +23,8 @@ cost.
 
 ## A recurring worksheet
 
-Use this table for every system discussed in the book:
+Use this table for every system discussed in the book. It restates the six
+questions from the introduction as fields you can fill in for any system:
 
 | Dimension | Questions |
 | --- | --- |

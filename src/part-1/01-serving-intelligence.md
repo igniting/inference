@@ -289,7 +289,7 @@ more about total completion time than first-token latency. A real-time voice
 assistant values steady output and fast cancellation. There is no useful
 configuration without a workload and a service objective.
 
-The same six questions, asked of three different services, produce different
+The same plan questions, asked of three different services, produce different
 plans — which is the strongest argument against copying configurations:
 
 | Plan question | Interactive chat | Batch summarization | Voice assistant |

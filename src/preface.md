@@ -66,6 +66,9 @@ questions behind them are durable:
 - What correctness contract is being preserved?
 - Which measurement would falsify the proposed improvement?
 
+Chapter 1 turns these questions into an execution plan, and the worksheet in
+How to Read This Book turns them into an evidence checklist.
+
 ## The contract with the reader
 
 Each chapter begins with a service problem and ends with an investigation. The

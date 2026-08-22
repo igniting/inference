@@ -86,7 +86,11 @@ separate worker pools with explicit intermediate transfer.
 boundary to final response completion.
 
 **Engine step** — One scheduler decision and its corresponding model execution
-and output update.
+and output update. Some chapters use "model step" for the same cycle.
+
+**Eviction** — Removing reusable cached state, such as prefix blocks, to free
+capacity under a retention policy. Distinct from preemption, which removes
+running work, and from swapping, which moves a suspended request's state.
 
 **Expert parallelism (EP)** — Distributing different MoE experts across ranks
 and routing token representations to their owners.
@@ -204,6 +208,11 @@ instead of or alongside token-indexed attention state.
 
 **Structured output** — Output constrained or interpreted according to a schema,
 grammar, tool protocol, or parser contract.
+
+**Swapping** — Freeing capacity by moving a suspended request's state to host
+memory so it can be restored later without recomputation; the alternative to
+recomputing after preemption. The state occupies host capacity for the whole
+suspension.
 
 **Tensor parallelism (TP)** — Sharding matrices and operations within model
 layers across ranks, usually with frequent collectives.
