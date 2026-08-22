@@ -1,5 +1,6 @@
 # Summary
 
+- [Inference Systems](index.md)
 - [Preface](preface.md)
 - [Introduction](introduction.md)
 - [How to Read This Book](how-to-read.md)

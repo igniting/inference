@@ -8,7 +8,7 @@ capacity decision.
 
 | Symbol | Meaning | Typical unit |
 | --- | --- | --- |
-| `lambda` | request arrival rate | requests/second |
+| λ | request arrival rate | requests/second |
 | `L_in` | input length | tokens, frames, or samples |
 | `L_out` | output length | tokens, frames, or samples |
 | `N` | active sequences or requests | count |
@@ -20,7 +20,7 @@ For a stable system, Little's Law relates average concurrency, arrival rate,
 and average time:
 
 ```text
-Q = lambda * W
+Q = λ · W
 ```
 
 The relationship is useful for checking measurements. If 20 requests arrive

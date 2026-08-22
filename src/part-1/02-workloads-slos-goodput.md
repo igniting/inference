@@ -253,14 +253,14 @@ Imagine a server completing 100 requests per second while 120 arrive. Its
 throughput looks stable, but the queue grows by 20 requests every second.
 Latency will continue rising until callers time out or the system fails.
 
-Appendix A collects a useful sanity check here. With `lambda` the arrival
+Appendix A collects a useful sanity check here. With λ the arrival
 rate, `W` the average time in the system, and `Q` the average number of
-requests present, Little's Law says `Q = lambda * W`. In the overloaded
+requests present, Little's Law says `Q = λ · W`. In the overloaded
 service, completion lags arrival by 20 requests per second, so `Q` climbs
 without bound: after thirty seconds, roughly 600 requests are waiting whose
 owners have not yet noticed. Running the law in the diagnostic direction is
 just as valuable — measure any two of the three quantities and the third is
-determined, so a dashboard showing stable `W` while `lambda` rises must also
+determined, so a dashboard showing stable `W` while λ rises must also
 show `Q` rising somewhere, and if it does not, one of the measurements is
 lying about its population. The law speaks in averages and assumes a stable
 system; it predicts nothing about tails, which is precisely why percentiles
