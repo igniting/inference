@@ -13,7 +13,7 @@ it is just a loop, and the loop is short enough to hold in your head.
 
 **One request through one GPU: the complete path.**
 
-```mermaid
+```blockdiag
 flowchart LR
     A["Text in"] --> B["Tokenizer"]
     B --> C["Prefill"]
@@ -225,7 +225,7 @@ hardware with nothing else to do.
 
 **The request owns memory at three different lifetimes.**
 
-```mermaid
+```blockdiag
 flowchart TB
     A["Server lifetime"] --> B["Model weights"]
     C["Request lifetime"] --> D["Growing KV cache"]

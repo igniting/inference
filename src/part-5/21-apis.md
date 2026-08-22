@@ -20,7 +20,7 @@ not move without a version.
 
 **The API translates a public contract into engine work and back again.**
 
-```mermaid
+```blockdiag
 flowchart LR
     C["Client request"] --> A["Authenticate and authorize"]
     A --> V["Validate limits and semantics"]
@@ -33,7 +33,7 @@ flowchart LR
 
 **A streamed request remains a state machine after the connection changes.**
 
-```mermaid
+```blockdiag
 flowchart LR
     Q["Queued"] --> R["Running"]
     R --> S["Streaming"]
@@ -132,7 +132,7 @@ drained device work and released state.
 
 Backpressure belongs inside this machine rather than beside it:
 
-```mermaid
+```blockdiag
 flowchart LR
     T["Engine output tokens"] --> B{"Connection buffer<br/>below limit?"}
     B -->|Yes| E["Emit event downstream"]

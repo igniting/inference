@@ -24,7 +24,7 @@ information: its view of every replica is a report about the past.
 Telemetry flows one way, decisions the other, and the loop closes only as fast
 as reports travel.
 
-```mermaid
+```blockdiag
 flowchart LR
     A["Request and deadline"] --> R["Global router"]
     T["Stale queue and locality telemetry"] --> R
@@ -38,7 +38,7 @@ flowchart LR
 
 **A hybrid routing score compares waiting, recomputation, and movement.**
 
-```mermaid
+```blockdiag
 flowchart TB
     C["Candidate replica"] --> Q["Estimate queue time"]
     C --> P["Estimate missing-prefix compute"]

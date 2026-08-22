@@ -23,7 +23,7 @@ the bodies are buried.
 
 **A block table separates logical sequence order from physical placement.**
 
-```mermaid
+```blockdiag
 flowchart LR
     L0["Logical block 0"] --> P3["Physical block 3"]
     L1["Logical block 1"] --> P8["Physical block 8"]
@@ -35,7 +35,7 @@ flowchart LR
 
 **Reusable blocks move through ownership states before returning to the pool.**
 
-```mermaid
+```blockdiag
 flowchart LR
     F["Free"] -->|allocate| W["Private and writable"]
     W -->|GPU complete| S["Sealed"]

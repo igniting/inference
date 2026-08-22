@@ -15,9 +15,10 @@ and originality rules are documented in the
 [research policy](src/research-method.md).
 
 Every chapter includes at least two block diagrams and a compact comparison
-table. The diagram source is versioned beside the prose so architectural
-explanations and their visuals change together. A single signal-blue visual
-system unifies the prose, navigation, code, diagrams, and tables.
+table. A custom Dagre-backed SVG renderer keeps block geometry, typography,
+connectors, and responsive reflow consistent while the diagram source remains
+versioned beside the prose. A single signal-blue visual system unifies the
+prose, navigation, code, diagrams, and tables.
 
 ## Read locally
 
@@ -40,7 +41,7 @@ Pages.
 
 - [x] Define the thesis, audience, and boundaries
 - [x] Establish an evidence and originality policy
-- [x] Draft all 24 chapters and seven appendices
+- [x] Draft all 27 chapters and seven appendices
 - [x] Compare coverage and pedagogy with the supplied reference book
 - [x] Revise the complete manuscript after editorial critique
 - [x] Replace open-ended exercises with worked examples and full solutions

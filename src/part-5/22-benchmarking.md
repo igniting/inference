@@ -24,7 +24,7 @@ from production that the decision it drives is a coin flip with extra steps.
 
 **A benchmark is an evidence loop, not a single load-generator run.**
 
-```mermaid
+```blockdiag
 flowchart LR
     H["Falsifiable hypothesis"] --> W["Representative workload"]
     W --> R["Controlled repeated runs"]
@@ -36,7 +36,7 @@ flowchart LR
 
 **Offered load must be swept through the service's operating regimes.**
 
-```mermaid
+```blockdiag
 flowchart LR
     L["Low load"] --> S["Saturation approach"]
     S --> O["Overload"]

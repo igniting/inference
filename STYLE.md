@@ -41,9 +41,9 @@ pedagogical qualities, not language to imitate.
   chromatic accent; use its tints for emphasis, never a competing hue.
 - Treat diagrams and tables as technical plates: the same border, radius,
   spacing, typography, and signal-blue hierarchy should connect them.
-- Wrap and balance diagram labels before allowing nodes to grow. Preserve
-  readable node type in dense horizontal diagrams by panning the plate instead
-  of shrinking the entire system to fit.
+- Use fixed block proportions and balanced label wrapping. When a graph is too
+  wide, change its layout direction so it fits the page without internal
+  scrolling or unreadably small type.
 - Reserve Literata for sustained reading, Inter for hierarchy and navigation,
   and JetBrains Mono for code, measurements, and structural labels.
 - Use color to express emphasis and flow, not to assign undocumented meaning.

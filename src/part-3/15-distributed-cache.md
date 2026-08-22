@@ -18,7 +18,7 @@ hit rates.
 
 **A hierarchical cache trades increasing capacity for increasing access cost.**
 
-```mermaid
+```blockdiag
 flowchart LR
     G["GPU KV blocks"] <--> H["Host memory"]
     H <--> L["Local storage"]
@@ -31,7 +31,7 @@ Every arrow below can fail or be cancelled independently; the protocol's job
 is to make sure each failure leaves the system in the state the step before it
 would have left.
 
-```mermaid
+```blockdiag
 flowchart LR
     I["Validate semantic identity"] --> M["Resolve location metadata"]
     M --> A["Allocate destination blocks"]

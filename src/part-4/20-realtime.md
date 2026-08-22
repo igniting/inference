@@ -19,7 +19,7 @@ clock that never stops and a user who can veto the output at any moment.
 
 **A live conversation streams through several models and transports.**
 
-```mermaid
+```blockdiag
 flowchart LR
     A["Audio input"] --> R["Streaming ASR"]
     R --> L["Language model"]
@@ -33,7 +33,7 @@ flowchart LR
 
 **Interruption advances the session generation and fences late work.**
 
-```mermaid
+```blockdiag
 flowchart LR
     G7["Turn generation 7"] --> O["Text and audio in flight"]
     I["User interruption"] --> G8["Advance to generation 8"]

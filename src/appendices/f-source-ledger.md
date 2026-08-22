@@ -138,11 +138,13 @@ the behavior as release-dependent.
 
 ## Publication tooling
 
-Block diagrams are rendered with
-[Mermaid 11.16.0](https://www.npmjs.com/package/mermaid/v/11.16.0), vendored
-into the book itself (`assets/vendor/`), so diagrams render offline and are not
-affected by CDN changes. The integration follows Mermaid's official
-[initialization and rendering guidance](https://mermaid.js.org/config/usage.html).
+Block diagrams use a purpose-built SVG renderer, with
+[Dagre 3.1.1](https://www.npmjs.com/package/@dagrejs/dagre/v/3.1.1) providing
+directed-graph coordinates. Dagre and its license are vendored into the book
+(`assets/vendor/`), so diagrams render offline and are not affected by CDN
+changes. The book controls block dimensions, label wrapping, connectors,
+decision shapes, and responsive reflow; the diagram definitions remain
+readable as text if the client-side renderer cannot load.
 Body, interface, and code typefaces (Literata, Inter, JetBrains Mono) are also
 vendored as subsets. Diagram definitions remain readable as text if the
 client-side renderer cannot load.

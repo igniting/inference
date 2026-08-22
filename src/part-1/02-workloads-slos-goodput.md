@@ -22,7 +22,7 @@ the workload description that all of it depends on.
 
 **Goodput filters completed work through the product contract.**
 
-```mermaid
+```blockdiag
 flowchart LR
     A["Arrivals"] --> B["Queue"]
     B --> C["Inference service"]
@@ -34,7 +34,7 @@ flowchart LR
 
 **The load generator changes what overload looks like.**
 
-```mermaid
+```blockdiag
 flowchart TB
     O["Open-loop source"] -->|independent arrivals| S1["Server"]
     S1 --> Q["Queue can grow"]

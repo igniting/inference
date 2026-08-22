@@ -23,7 +23,7 @@ it becomes at scale.
 
 **Adapter weights are thin overlays on the shared base model.**
 
-```mermaid
+```blockdiag
 flowchart LR
     B["Base weights (read-only, 140 GB)"] --> F["Forward pass"]
     A1["Adapter A weights (~160 MiB)"] --> F
@@ -34,7 +34,7 @@ flowchart LR
 **Multi-adapter scheduling groups requests by active adapter within a mixed
 batch.**
 
-```mermaid
+```blockdiag
 flowchart TB
     Q["Waiting requests with adapter tags"] --> S["Adapter-aware scheduler"]
     S --> G1["Group: Adapter A requests"]
@@ -48,7 +48,7 @@ flowchart TB
 
 **Adapter placement turns routing into a three-term cost.**
 
-```mermaid
+```blockdiag
 flowchart TB
     R["Request with adapter tag"] --> C["Candidate replica"]
     C --> QT["Estimate queue time"]

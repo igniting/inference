@@ -1,10 +1,6 @@
-/* Book chrome and diagram renderer.
- *
- * Loads the vendored Mermaid build (no network dependency), renders every
- * ```mermaid block as a numbered figure whose caption is the bold thesis
- * line above it, and applies the book's single signal-blue palette natively.
- * Also upgrades chapter openers with part-aware eyebrows and styles the
- * part-divider pages.
+/* Reading chrome for the book: chapter openers, navigation, cross-references,
+ * running heads, progress, code labels, and table alignment. Block diagrams
+ * are handled independently by diagram-renderer.js.
  */
 
 (function () {
@@ -27,21 +23,6 @@
   }
 
   enforceSingleTheme();
-
-  /* mdBook copies non-markdown files from src/ verbatim, so the vendored
-     bundle lives at <book-root>/assets/vendor/. path_to_root is mdBook's
-     page-depth-relative prefix (a top-level const in the generated head). */
-  function mermaidBundleUrl() {
-    var root = typeof path_to_root === "string" ? path_to_root : "";
-    return new URL(root + "assets/vendor/mermaid.min.js", document.baseURI);
-  }
-
-  function cssVar(name, fallback) {
-    var value = getComputedStyle(document.documentElement)
-      .getPropertyValue(name)
-      .trim();
-    return value || fallback;
-  }
 
   /* ------------------------------------------------------------------ */
   /* Chapter openers                                                     */
@@ -120,228 +101,6 @@
     label.textContent = eyebrow.toUpperCase();
     h1.insertAdjacentElement("beforebegin", label);
     main.classList.add("has-opener");
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Figures                                                             */
-  /* ------------------------------------------------------------------ */
-
-  var figures = [];
-  var LABEL_MIN_CHARS = 14;
-  var LABEL_MAX_CHARS = 22;
-
-  function balanceLabel(label, maxChars, minChars) {
-    maxChars = maxChars || LABEL_MAX_CHARS;
-    minChars = minChars || LABEL_MIN_CHARS;
-    var words = label.trim().split(/\s+/);
-    var lines = [];
-    var line = "";
-
-    words.forEach(function (word) {
-      var candidate = line ? line + " " + word : word;
-      if (line && candidate.length > maxChars) {
-        lines.push(line);
-        line = word;
-      } else {
-        line = candidate;
-      }
-    });
-    if (line) lines.push(line);
-
-    if (lines.length === 1 && lines[0].length < minChars) {
-      var missing = minChars - lines[0].length;
-      var before = Math.floor(missing / 2);
-      var after = missing - before;
-      lines[0] = "\u00a0".repeat(before) + lines[0] + "\u00a0".repeat(after);
-    }
-
-    return "`" + lines.join("\n") + "`";
-  }
-
-  function normalizeDiagramSource(source) {
-    return source.replace(
-      /(\b[A-Za-z][\w-]*)(\[|\{)"([^"]+)"(\]|\})/g,
-      function (_match, id, open, label, close) {
-        var balanced = open === "{"
-          ? balanceLabel(label, 15, 12)
-          : balanceLabel(label);
-        return id + open + '"' + balanced + '"' + close;
-      }
-    );
-  }
-
-  function buildFigures() {
-    var blocks = document.querySelectorAll("pre > code.language-mermaid");
-    var counter = 0;
-    blocks.forEach(function (code) {
-      var pre = code.parentElement;
-      var caption = null;
-      var prev = pre.previousElementSibling;
-      while (prev && prev.classList && prev.classList.contains("diagram-figure")) {
-        prev = prev.previousElementSibling;
-      }
-      if (prev && prev.tagName === "P") {
-        caption = prev.textContent.trim().replace(/[:：]\s*$/, "");
-      }
-
-      counter += 1;
-      var main = document.querySelector(".content main") || document.querySelector("main");
-      var chapterNo = main ? main.dataset.chapterNumber : null;
-      var figureLabel = chapterNo
-        ? "Figure " + chapterNo + "." + counter
-        : "Figure " + counter;
-      var figure = document.createElement("figure");
-      figure.className = "diagram-figure";
-
-      var box = document.createElement("div");
-      box.className = "diagram-box";
-      box.setAttribute("role", "img");
-      box.setAttribute("aria-label", caption || "System block diagram");
-      var originalSource = code.textContent;
-      var renderSource = normalizeDiagramSource(originalSource);
-      box.textContent = renderSource;
-
-      var cap = document.createElement("figcaption");
-      var labelSpan = document.createElement("span");
-      labelSpan.className = "fig-label";
-      labelSpan.textContent = figureLabel;
-      cap.appendChild(labelSpan);
-      if (caption) {
-        cap.appendChild(document.createTextNode(caption));
-      }
-
-      figure.appendChild(box);
-      figure.appendChild(cap);
-      pre.replaceWith(figure);
-      if (prev && prev.tagName === "P" && caption !== null) {
-        prev.remove();
-      }
-      figures.push({
-        box: box,
-        figure: figure,
-        originalSource: originalSource,
-        renderSource: renderSource
-      });
-    });
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Rendering                                                           */
-  /* ------------------------------------------------------------------ */
-
-  function themeConfig() {
-    return {
-      startOnLoad: false,
-      securityLevel: "strict",
-      theme: "base",
-      darkMode: false,
-      fontFamily: "'Inter', system-ui, sans-serif",
-      themeVariables: {
-        fontFamily: "'Inter', system-ui, sans-serif",
-        fontSize: "13.5px",
-        primaryColor: cssVar("--surface-raised", "#ffffff"),
-        primaryTextColor: cssVar("--fg", "#172033"),
-        primaryBorderColor: cssVar("--signal", "#2458d3"),
-        lineColor: cssVar("--signal", "#2458d3"),
-        textColor: cssVar("--fg", "#172033"),
-        titleColor: cssVar("--fg", "#172033"),
-        edgeLabelBackground: cssVar("--surface-raised", "#ffffff"),
-        clusterBkg: "transparent",
-        clusterBorder: cssVar("--table-border-color", "#d9e1f0"),
-        mainBkg: cssVar("--surface-raised", "#ffffff"),
-        nodeBorder: cssVar("--signal", "#2458d3"),
-        nodeTextColor: cssVar("--fg", "#172033"),
-        arrowheadColor: cssVar("--signal", "#2458d3")
-      },
-      flowchart: {
-        curve: "stepAfter",
-        diagramPadding: 8,
-        htmlLabels: false,
-        inheritDir: true,
-        nodeSpacing: 34,
-        rankSpacing: 48,
-        useMaxWidth: true,
-        padding: 12,
-        wrappingWidth: 154
-      }
-    };
-  }
-
-  function renderBoxes(boxes) {
-    return window.mermaid.run({ nodes: boxes, suppressErrors: false });
-  }
-
-  function failFigures(message) {
-    console.error(message);
-    figures.forEach(function (item) {
-      item.box.classList.add("diagram-error");
-      item.box.removeAttribute("role");
-      item.box.removeAttribute("aria-label");
-      item.box.textContent = item.originalSource;
-    });
-  }
-
-  function classifyFigures() {
-    figures.forEach(function (item) {
-      var svg = item.box.querySelector("svg");
-      if (!svg) return;
-      var viewBox = (svg.getAttribute("viewBox") || "")
-        .trim()
-        .split(/\s+/)
-        .map(Number);
-      var aspect = viewBox.length === 4 && viewBox[3] > 0
-        ? viewBox[2] / viewBox[3]
-        : 1;
-      var nodes = item.box.querySelectorAll(".node").length;
-      var isWide = nodes >= 5 && aspect >= 4;
-      var isPannable = isWide || window.matchMedia("(max-width: 700px)").matches;
-      item.figure.classList.toggle("diagram-wide", isWide);
-      item.figure.classList.toggle("diagram-pannable", isPannable);
-      if (isPannable && !item.figure.querySelector(".diagram-pan-hint")) {
-        var hint = document.createElement("span");
-        hint.className = "diagram-pan-hint";
-        hint.setAttribute("aria-hidden", "true");
-        hint.textContent = "Pan diagram →";
-        item.figure.appendChild(hint);
-      }
-      if (isWide) {
-        var naturalWidth = Math.min(1200, Math.max(960, viewBox[2]));
-        item.figure.style.setProperty(
-          "--diagram-min-width",
-          Math.round(naturalWidth) + "px"
-        );
-      }
-    });
-  }
-
-  function renderAll() {
-    if (!figures.length) return Promise.resolve();
-    window.mermaid.initialize(themeConfig());
-    return renderBoxes(figures.map(function (item) { return item.box; }))
-      .then(classifyFigures)
-      .catch(function (error) {
-        failFigures("Unable to render block diagrams: " + error);
-      });
-  }
-
-  function loadMermaid() {
-    return new Promise(function (resolve, reject) {
-      if (window.mermaid) {
-        resolve(window.mermaid);
-        return;
-      }
-      var tag = document.createElement("script");
-      tag.src = mermaidBundleUrl().href;
-      tag.async = true;
-      tag.onload = function () {
-        if (window.mermaid) resolve(window.mermaid);
-        else reject(new Error("mermaid global missing after load"));
-      };
-      tag.onerror = function () {
-        reject(new Error("vendored mermaid.min.js failed to load from " + tag.src));
-      };
-      document.head.appendChild(tag);
-    });
   }
 
   /* ------------------------------------------------------------------ */
@@ -525,7 +284,7 @@
       function (code) {
         var match = code.className.match(/language-([\w+#.-]+)/);
         var lang = match ? match[1].toLowerCase() : null;
-        if (!lang || lang === "text" || lang === "mermaid") return;
+        if (!lang || lang === "text" || lang === "blockdiag") return;
         code.parentElement.dataset.lang = lang;
       }
     );
@@ -560,7 +319,9 @@
     enforceSingleTheme();
     addSkipLink();
     enhanceOpeners();
-    buildFigures();
+    if (window.InferenceDiagramRenderer) {
+      window.InferenceDiagramRenderer.mount();
+    }
     styleSidebar();
     enhanceCrossReferences();
     buildPager();
@@ -568,14 +329,5 @@
     initProgressBar();
     tagCodeLanguages();
     alignNumericCells();
-    if (!figures.length) return;
-
-    loadMermaid()
-      .then(function () {
-        return renderAll();
-      })
-      .catch(function (error) {
-        failFigures(error && error.message ? error.message : String(error));
-      });
   });
 })();

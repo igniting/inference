@@ -18,7 +18,7 @@ because two stages disagree about what makes two pieces of media "the same."
 
 **A multimodal request is a pipeline before language decoding begins.**
 
-```mermaid
+```blockdiag
 flowchart LR
     B["Media bytes"] --> D["Decode and validate"]
     D --> P["Resize and preprocess"]
@@ -31,7 +31,7 @@ flowchart LR
 
 **Reuse can occur at several boundaries with different identity rules.**
 
-```mermaid
+```blockdiag
 flowchart TB
     M["Stable media identity"] --> C1["Decoded-media cache"]
     C1 --> C2["Preprocessed-tensor cache"]
@@ -299,7 +299,7 @@ loop probes them, so language workers discover encoders through the same
 join/leave/health protocol Chapter 16 requires of any replica — an encoder that
 stops answering probes is routed around before requests pile up behind it.
 
-```mermaid
+```blockdiag
 flowchart LR
     M["Media bytes"] --> EQ["Encoder queue<br/>age ~40 ms"]
     EQ --> ENC["Encoder pool"] 

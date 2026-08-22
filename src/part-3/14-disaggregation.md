@@ -19,7 +19,7 @@ measuring the other.
 The feedback edge on the right is what keeps the pipeline honest: admission
 must know whether decode capacity actually exists, not whether prefill is idle.
 
-```mermaid
+```blockdiag
 flowchart LR
     A["Admission"] --> P["Prefill queue and workers"]
     P --> K["KV state transfer"]
@@ -31,7 +31,7 @@ flowchart LR
 
 **Conditional placement chooses between local reuse and a transfer boundary.**
 
-```mermaid
+```blockdiag
 flowchart TB
     R["Request shape and queue state"] --> X{"Split saves more interference than transfer costs?"}
     X -->|No| C["Colocated prefill and decode"]
@@ -45,7 +45,7 @@ moves, the source publishes into the reservation, both sides poll for
 completion, and only a verified transfer inserts the request into a decode
 batch. Every earlier state is reversible; insertion is not.
 
-```mermaid
+```blockdiag
 flowchart LR
     R["Request admitted to decode"] --> A["Reserve destination blocks"]
     A --> PB["Publish block map to prefill"]

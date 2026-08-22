@@ -19,7 +19,7 @@ investigation method transfers to any engine.
 
 **A debugging session is a directed search, not a tour of dashboards.**
 
-```mermaid
+```blockdiag
 flowchart LR
     S["Symptom"] --> H["Hypotheses ranked by likelihood"]
     H --> E["Evidence: metric, trace, or profile"]
@@ -31,7 +31,7 @@ flowchart LR
 
 **Each walkthrough follows the same five-step discipline.**
 
-```mermaid
+```blockdiag
 flowchart TB
     subgraph Method
         direction TB
@@ -66,7 +66,7 @@ Adding capacity treats a symptom and hides the cause.
 The first split separates three regions of the request path. Each has a
 distinct signal.
 
-```mermaid
+```blockdiag
 flowchart LR
     subgraph Region
         direction LR

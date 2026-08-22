@@ -23,7 +23,7 @@ single measurement can check them all.
 
 **Backend selection is a compatibility decision before a speed decision.**
 
-```mermaid
+```blockdiag
 flowchart TB
     R["Runtime shape and model metadata"] --> S["Backend selector"]
     S --> A["Attention kernel"]
@@ -38,7 +38,7 @@ flowchart TB
 
 **A kernel claim must survive three expanding measurement boundaries.**
 
-```mermaid
+```blockdiag
 flowchart LR
     K["Isolated kernel"] --> S["Complete engine step"]
     S --> W["Production-shaped workload"]

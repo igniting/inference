@@ -18,7 +18,7 @@ rather than what the scheduler can fit in memory.
 
 **Technical efficiency becomes product economics only after qualification.**
 
-```mermaid
+```blockdiag
 flowchart LR
     H["Hardware and service cost"] --> C["Available capacity"]
     C --> T["Completed tokens or media"]
@@ -30,7 +30,7 @@ flowchart LR
 
 **The architecture decision joins workload, placement, and trust boundaries.**
 
-```mermaid
+```blockdiag
 flowchart TB
     W["Workload and SLO"] --> A["Architecture decision"]
     M["Model and state topology"] --> A

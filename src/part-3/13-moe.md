@@ -22,7 +22,7 @@ dispatch boundary is where bytes move; everything left of it is metadata, and
 everything right of it is per-expert compute whose duration you do not control
 directly.
 
-```mermaid
+```blockdiag
 flowchart LR
     T["Input tokens"] --> R["Router and top-k selection"]
     R --> D["Dispatch by expert owner"]
@@ -40,7 +40,7 @@ moves weights between steps; a placement only pays for itself if the
 straggler time it removes exceeds the weight movement and cache disturbance it
 causes.
 
-```mermaid
+```blockdiag
 flowchart LR
     X["Router trace"] --> L["Tokens per expert and rank"]
     L --> P["Candidate placement"]

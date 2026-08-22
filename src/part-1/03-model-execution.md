@@ -23,7 +23,7 @@ have changed many details since the original Transformer described in
 
 **Prefill creates persistent state; decode consumes and extends it.**
 
-```mermaid
+```blockdiag
 flowchart LR
     P["Prompt tokens"] --> F["Prefill"]
     F --> K["KV state"]
@@ -36,7 +36,7 @@ flowchart LR
 
 **Different model families create different serving graphs.**
 
-```mermaid
+```blockdiag
 flowchart TB
     R["Request"] --> T{"Model topology"}
     T --> A["Dense decoder: repeated token loop"]

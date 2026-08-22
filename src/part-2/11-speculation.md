@@ -19,7 +19,7 @@ from corrupting committed state.
 
 **Speculative decoding proposes several tokens but commits only verified work.**
 
-```mermaid
+```blockdiag
 flowchart LR
     C["Current accepted prefix"] --> D["Draft proposes tokens"]
     D --> V["Target verifies proposal"]
@@ -33,7 +33,7 @@ flowchart LR
 **A speculation round is a strip of drafts with a rollback point at the first
 rejection.**
 
-```mermaid
+```blockdiag
 flowchart LR
     P["Committed prefix"] --> T1["Draft t+1"] --> T2["Draft t+2"] --> T3["Draft t+3"] --> V{"Verify all positions in one target step"}
     V -->|"all accepted"| C["Commit through t+3"]
@@ -44,7 +44,7 @@ flowchart LR
 
 **Constrained decoding adds parser state to every sampling step.**
 
-```mermaid
+```blockdiag
 flowchart LR
     L["Model logits"] --> M["Grammar or schema mask"]
     P["Parser state"] --> M

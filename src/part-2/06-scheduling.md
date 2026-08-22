@@ -23,7 +23,7 @@ different one of those parties.
 
 **Continuous batching changes membership at every engine step.**
 
-```mermaid
+```blockdiag
 flowchart LR
     Q["Waiting requests"] --> S["Scheduler"]
     A["Active decoders"] --> S
@@ -36,7 +36,7 @@ flowchart LR
 
 **A token budget forces an explicit priority between work types.**
 
-```mermaid
+```blockdiag
 flowchart TB
     R["Step token budget"] --> D["Reserve active decode tokens"]
     D --> P["Add bounded prefill chunks"]
@@ -47,7 +47,7 @@ flowchart TB
 
 **Chunking plus decode reservation, over three steps of the worked example.**
 
-```mermaid
+```blockdiag
 flowchart TB
     subgraph S1["Step 1: budget 16"]
         direction LR

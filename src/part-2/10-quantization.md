@@ -16,7 +16,7 @@ with a quality gate, not a compression setting.
 
 **Quantization inserts representation changes into the execution path.**
 
-```mermaid
+```blockdiag
 flowchart LR
     W["High-precision weights"] --> Q["Quantize and store scales"]
     Q --> K["Supported low-precision kernel"]
@@ -27,7 +27,7 @@ flowchart LR
 
 **A deployable format must pass both a systems gate and a quality gate.**
 
-```mermaid
+```blockdiag
 flowchart TB
     F["Candidate format"] --> M{"Fits memory and has target kernels?"}
     M -->|No| R["Reject for this platform"]
@@ -40,7 +40,7 @@ flowchart TB
 **A quantized multiply is a real multiply plus a scale, a round, and a wider
 accumulator.**
 
-```mermaid
+```blockdiag
 flowchart LR
     R["Real weights (BF16)"] --> G{"Pick one scale per group"}
     G --> I["Store integers (4/8 bit)"]

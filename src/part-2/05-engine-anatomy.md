@@ -28,7 +28,7 @@ component; they fail in the contracts between them.
 
 **The engine separates user-facing work from step-critical execution.**
 
-```mermaid
+```blockdiag
 flowchart LR
     A["API process"] --> B["Input and tokenization"]
     B --> C["Engine core"]
@@ -41,7 +41,7 @@ flowchart LR
 
 **Control messages and bulk data take related but distinct paths.**
 
-```mermaid
+```blockdiag
 flowchart TB
     R["Request record"] --> S["Schedule metadata"]
     S --> W["Worker command"]
@@ -53,7 +53,7 @@ flowchart TB
 
 **Overlapped output work needs versions to discard stale results.**
 
-```mermaid
+```blockdiag
 flowchart TB
     A["Step N completes on device"] --> B["Results queued for output processing"]
     A --> C["Step N+1 launches without waiting"]

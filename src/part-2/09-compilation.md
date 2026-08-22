@@ -19,7 +19,7 @@ and each artifact is only worth its cost for the shapes that actually arrive.
 
 **Compilation moves repeated host work into reusable artifacts.**
 
-```mermaid
+```blockdiag
 flowchart LR
     E["Eager Python and dispatch"] --> O["Operation launches"]
     O --> G["GPU execution"]
@@ -32,7 +32,7 @@ flowchart LR
 
 **Graph buckets trade artifact count against padding and fallback.**
 
-```mermaid
+```blockdiag
 flowchart TB
     B["Requested batch size"] --> X{"Compatible captured bucket?"}
     X -->|Exact| R["Replay exact graph"]
@@ -45,7 +45,7 @@ flowchart TB
 
 **Mode dispatch tries the strictest key first and relaxes toward eager.**
 
-```mermaid
+```blockdiag
 flowchart LR
     K["Batch descriptor"] --> D{"Dispatch"}
     D -->|"exact FULL key"| F["Full-graph replay"]

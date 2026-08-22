@@ -22,7 +22,7 @@ and paths along which bytes can move.
 
 **Every byte follows a physical path, even when the API hides it.**
 
-```mermaid
+```blockdiag
 flowchart LR
     R["GPU registers and SRAM"] --> H["Device HBM"]
     H --> P["PCIe or local GPU fabric"]
@@ -33,7 +33,7 @@ flowchart LR
 
 **The roofline question chooses the first optimization direction.**
 
-```mermaid
+```blockdiag
 flowchart TB
     O["Measure operation and byte traffic"] --> I["Compute arithmetic intensity"]
     I --> X{"Below compute-to-bandwidth crossover?"}

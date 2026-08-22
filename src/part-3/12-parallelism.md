@@ -16,7 +16,7 @@ crosses which wire.
 
 **Parallel dimensions split different objects and create different traffic.**
 
-```mermaid
+```blockdiag
 flowchart TB
     M["Model and request work"] --> D["Data parallel: replicas"]
     M --> T["Tensor parallel: layer tensors"]
@@ -27,7 +27,7 @@ flowchart TB
 
 **A rank mesh must be mapped onto the physical fabric.**
 
-```mermaid
+```blockdiag
 flowchart LR
     A["Logical TP group 0"] --> I0["Fast-link island 0"]
     B["Logical TP group 1"] --> I1["Fast-link island 1"]

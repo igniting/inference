@@ -20,7 +20,7 @@ target for graphs than language decode.
 
 **Diffusion repeats a denoising stage around persistent latent state.**
 
-```mermaid
+```blockdiag
 flowchart LR
     P["Prompt"] --> T["Text encoder"]
     T --> C["Conditioning"]
@@ -34,7 +34,7 @@ flowchart LR
 
 **Serving optimizations act at different boundaries in the loop.**
 
-```mermaid
+```blockdiag
 flowchart TB
     R["Request resolution, steps, and conditioning"] --> B["Compatible batching"]
     B --> G["Graph bucket"]

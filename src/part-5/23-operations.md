@@ -21,7 +21,7 @@ measurements designed before the event.
 
 **Operations needs signals from the request path and its resource owners.**
 
-```mermaid
+```blockdiag
 flowchart LR
     R["Request path"] --> M["Metrics: rates and distributions"]
     R --> T["Traces: waits and boundaries"]
@@ -34,7 +34,7 @@ flowchart LR
 
 **Readiness progresses through model-specific startup stages.**
 
-```mermaid
+```blockdiag
 flowchart LR
     P["Process alive"] --> W["Weights loaded"]
     W --> G["Distributed groups ready"]

@@ -24,7 +24,7 @@ dependencies that a text service never had to express.
 
 **Online reinforcement learning couples serving and training through versions.**
 
-```mermaid
+```blockdiag
 flowchart LR
     P["Prompts"] --> I["Inference rollout workers"]
     I --> R["Rewards and trajectories"]
@@ -36,7 +36,7 @@ flowchart LR
 
 **A multi-rank update prepares everywhere before it commits anywhere.**
 
-```mermaid
+```blockdiag
 flowchart LR
     S["Stage new weights"] --> V["Validate shapes and checksums"]
     V --> A{"All ranks prepared?"}

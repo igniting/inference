@@ -29,7 +29,7 @@ later chapter zooms into one region of this map.
 
 **One request crosses several queues and state owners.**
 
-```mermaid
+```blockdiag
 flowchart LR
     A["Client"] --> B["API and validation"]
     B --> C["Router"]
@@ -43,7 +43,7 @@ flowchart LR
 
 **The three planes operate at different time scales but share evidence.**
 
-```mermaid
+```blockdiag
 flowchart TB
     M["Management plane: deploy and configure"] --> C["Control plane: place and recover"]
     C --> D["Data plane: schedule and execute"]

@@ -394,29 +394,9 @@ code {
   margin: 2rem 0 2.3rem;
 }
 
-.diagram-pan-hint {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 2;
-  padding: 0.32rem 0.5rem;
-  border: 1px solid color-mix(in srgb, var(--signal) 28%, var(--rule));
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--surface-raised) 92%, var(--signal));
-  box-shadow: 0 2px 8px rgba(25, 59, 143, 0.08);
-  color: var(--signal-deep);
-  font-family: var(--mono-font);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  line-height: 1;
-  text-transform: uppercase;
-  pointer-events: none;
-}
-
 .diagram-box {
   padding: 22px 18px;
-  overflow-x: auto;
+  overflow: hidden;
   border: 1px solid var(--table-border-color);
   border-top: 3px solid var(--signal);
   border-radius: 8px;
@@ -426,82 +406,84 @@ code {
     linear-gradient(90deg, rgba(36, 88, 211, 0.045) 1px, transparent 1px);
   background-size: 24px 24px;
   box-shadow: 0 12px 30px rgba(25, 59, 143, 0.08);
-  scrollbar-color: color-mix(in srgb, var(--signal) 55%, var(--rule)) transparent;
-  scrollbar-width: thin;
   text-align: center;
 }
 
-.diagram-box::-webkit-scrollbar {
-  height: 6px;
-}
-
-.diagram-box::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--signal) 55%, var(--rule));
-}
-
-.diagram-box svg {
+.block-diagram {
   display: block;
+  width: 100%;
   margin: 0 auto;
   max-width: 100%;
   height: auto;
+  overflow: visible;
 }
 
-.diagram-box .nodeLabel,
-.diagram-box text {
-  font-family: var(--utility-font) !important;
-  font-size: 13px !important;
-  font-weight: 500 !important;
+.block-node rect,
+.block-node polygon {
+  fill: var(--surface-raised);
+  stroke: var(--signal);
+  stroke-width: 1.4px;
+  vector-effect: non-scaling-stroke;
 }
 
-.diagram-box .edgeLabel,
-.diagram-box .edgeLabel text {
-  color: color-mix(in srgb, var(--fg) 78%, var(--signal)) !important;
-  font-family: var(--utility-font) !important;
-  font-size: 11px !important;
-  font-weight: 500 !important;
+.block-node-decision polygon {
+  fill: var(--signal-soft);
 }
 
-.diagram-box .node rect {
-  rx: 4px;
-  ry: 4px;
-  fill: var(--surface-raised) !important;
-  stroke: var(--signal) !important;
-  stroke-width: 1.5px !important;
+.block-node-label {
+  fill: var(--fg);
+  font-family: var(--utility-font);
+  font-size: 13px;
+  font-weight: 500;
 }
 
-.diagram-box .node polygon,
-.diagram-box .node circle,
-.diagram-box .node path {
-  fill: var(--signal-soft) !important;
-  stroke: var(--signal) !important;
-  stroke-width: 1.5px !important;
+.block-edge {
+  stroke: var(--signal);
+  stroke-width: 1.35px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }
 
-.diagram-box .flowchart-link {
-  stroke: var(--signal) !important;
-  stroke-width: 1.45px !important;
+.block-edge-dotted {
+  stroke-dasharray: 4 4;
 }
 
-.diagram-box marker path {
-  fill: var(--signal) !important;
-  stroke: var(--signal) !important;
+.block-edge-line {
+  stroke: color-mix(in srgb, var(--signal) 58%, var(--rule));
 }
 
-.diagram-box .edgeLabel rect,
-.diagram-box .labelBkg {
-  fill: var(--surface-raised) !important;
-  opacity: 0.96 !important;
+.block-diagram marker path {
+  fill: var(--signal);
 }
 
-.diagram-box .cluster rect {
-  fill: color-mix(in srgb, var(--signal) 4%, var(--surface-raised)) !important;
-  stroke: color-mix(in srgb, var(--signal) 38%, var(--rule)) !important;
+.block-edge-label rect {
+  fill: var(--surface-raised);
+  opacity: 0.97;
+}
+
+.block-edge-text {
+  fill: color-mix(in srgb, var(--fg) 76%, var(--signal));
+  font-family: var(--utility-font);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.block-group {
+  fill: color-mix(in srgb, var(--signal) 4%, var(--surface-raised));
+  stroke: color-mix(in srgb, var(--signal) 38%, var(--rule));
+  stroke-width: 1px;
   stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
 }
 
-.diagram-wide .diagram-box svg {
-  min-width: var(--diagram-min-width, 960px);
+.block-group-label {
+  fill: var(--signal-deep);
+  font-family: var(--mono-font);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .diagram-figure figcaption {
@@ -830,14 +812,6 @@ main a.xref {
     padding: 14px 10px;
   }
 
-  .diagram-box svg {
-    min-width: 620px;
-  }
-
-  .diagram-wide .diagram-box svg {
-    min-width: 880px;
-  }
-
   .part-divider {
     padding-block: 9vh 6vh !important;
   }
@@ -867,11 +841,6 @@ main a.xref {
   .diagram-figure,
   .table-wrapper {
     margin-inline: 0;
-  }
-
-  .diagram-wide .diagram-box svg {
-    min-width: 0;
-    max-width: 100% !important;
   }
 
   .opening-eyebrow {
@@ -907,7 +876,6 @@ main a.xref {
   }
 
   #reading-progress,
-  .diagram-pan-hint,
   .page-pager {
     display: none;
   }
