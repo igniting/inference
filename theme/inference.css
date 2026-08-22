@@ -37,6 +37,13 @@
   --sidebar-target-width: 318px;
   --page-padding: 28px;
   --menu-bar-height: 58px;
+  --space-1: 6px;
+  --space-2: 10px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 48px;
+  --space-7: 80px;
   --body-font: "Literata", Charter, "Bitstream Charter", Georgia, serif;
   --utility-font: "Inter", system-ui, -apple-system, sans-serif;
   --mono-font: "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace;
@@ -169,6 +176,15 @@ body {
   line-height: 1.4;
 }
 
+.sidebar ol.section li.chapter-item {
+  margin-block: 0;
+}
+
+.sidebar ol.section li.chapter-item a {
+  padding-block: 4px;
+  line-height: 1.34;
+}
+
 .sidebar ol.chapter li.chapter-item a:hover {
   background: var(--signal-faint);
   color: var(--fg);
@@ -201,7 +217,7 @@ body {
 }
 
 .content main {
-  padding-block: 54px 96px;
+  padding-block: var(--space-6) var(--space-7);
 }
 
 main {
@@ -210,25 +226,25 @@ main {
 
 .content main p,
 .content main li {
-  line-height: 1.78;
+  line-height: 1.68;
 }
 
 .content main p {
-  margin-block: 1.05em;
+  margin: 0 0 0.95em;
   text-wrap: pretty;
 }
 
 .content main li {
-  margin-block: 0.45em;
+  margin-block: 0.32em;
 }
 
 .content main li > p {
-  margin-block: 0.35em;
+  margin-block: 0.25em;
 }
 
 .content main ul,
 .content main ol {
-  margin-block: 1.05em;
+  margin-block: 0.9em;
 }
 
 .content main h2 + p,
@@ -237,7 +253,7 @@ main {
 .content main h3 + ul,
 .content main h2 + ol,
 .content main h3 + ol {
-  margin-top: 0.6em;
+  margin-top: 0;
 }
 
 .content main h1,
@@ -250,8 +266,8 @@ main {
 }
 
 .content main h1 {
-  margin: 0 0 1.25rem;
-  padding-bottom: 1.1rem;
+  margin: 0 0 1.1rem;
+  padding-bottom: 1rem;
   border-bottom: 1px solid var(--sidebar-spacer);
   font-size: clamp(36px, 3.9vw, 48px);
   font-weight: 650;
@@ -263,7 +279,7 @@ main {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 0 0 0.85rem;
+  margin: 0 0 0.65rem;
   color: var(--signal);
   font-family: var(--mono-font);
   font-size: 11px;
@@ -284,13 +300,13 @@ main {
 .has-opener .opening-eyebrow + h1 + p {
   color: color-mix(in srgb, var(--fg) 88%, var(--bg));
   font-size: 19px;
-  line-height: 1.68;
+  line-height: 1.62;
 }
 
 .content main h2 {
   position: relative;
-  margin-top: 3.2rem;
-  margin-bottom: 1rem;
+  margin-top: 2.8rem;
+  margin-bottom: 0.75rem;
   padding-top: 0.25rem;
   font-size: 25px;
   font-weight: 650;
@@ -300,7 +316,7 @@ main {
 
 .content main h2::before {
   position: absolute;
-  top: -0.85rem;
+  top: -0.7rem;
   left: 0;
   width: 58px;
   height: 2px;
@@ -309,7 +325,8 @@ main {
 }
 
 .content main h3 {
-  margin-top: 2rem;
+  margin-top: 1.7rem;
+  margin-bottom: 0.55rem;
   color: color-mix(in srgb, var(--fg) 88%, var(--signal));
   font-size: 19px;
   font-weight: 650;
@@ -372,8 +389,8 @@ code {
 }
 
 .content main pre {
-  margin: 1.65rem 0;
-  padding: 1.25rem 1.4rem;
+  margin: 1.4rem 0;
+  padding: 1.1rem 1.25rem;
   border: 1px solid color-mix(in srgb, var(--signal) 38%, #000000);
   border-top: 3px solid var(--signal);
   border-radius: 8px;
@@ -391,7 +408,7 @@ code {
 
 .diagram-figure {
   position: relative;
-  margin: 2rem 0 2.3rem;
+  margin: 1.75rem 0 2rem;
 }
 
 .diagram-box {
@@ -490,7 +507,7 @@ code {
   display: flex;
   align-items: baseline;
   gap: 0.75rem;
-  margin-top: 0.7rem;
+  margin-top: 0.55rem;
   color: color-mix(in srgb, var(--fg) 62%, var(--bg));
   font-family: var(--utility-font);
   font-size: 12.5px;
@@ -519,7 +536,7 @@ code {
 
 .content main.part-divider {
   min-height: 58vh;
-  padding-block: 16vh 10vh;
+  padding-block: 12vh 8vh;
   text-align: center;
 }
 
@@ -536,14 +553,14 @@ code {
   display: block;
   width: 64px;
   height: 3px;
-  margin: 1.6rem auto 0;
+  margin: 1.35rem auto 0;
   background: var(--signal);
   content: "";
 }
 
 .part-divider p:not(.divider-range) {
   max-width: 36em;
-  margin: 2.4rem auto 0;
+  margin: 1.8rem auto 0;
   color: color-mix(in srgb, var(--fg) 78%, var(--bg));
   font-size: 19.5px;
   line-height: 1.72;
@@ -551,7 +568,7 @@ code {
 }
 
 .part-divider .divider-range {
-  margin-top: 3rem;
+  margin-top: 2.25rem;
   color: var(--signal);
   font-family: var(--utility-font);
   font-size: 12px;
@@ -566,7 +583,7 @@ code {
 }
 
 .table-wrapper {
-  margin: 1.8rem 0;
+  margin: 1.5rem 0;
   border: 1px solid var(--table-border-color);
   border-top: 3px solid var(--signal);
   border-radius: 8px;
@@ -776,7 +793,12 @@ main a.xref {
   }
 
   .content main {
-    padding-block: 34px 72px;
+    padding-block: var(--space-5) 64px;
+  }
+
+  .content main p,
+  .content main li {
+    line-height: 1.7;
   }
 
   .opening-eyebrow {
@@ -789,7 +811,9 @@ main a.xref {
   }
 
   .content main h1 {
-    font-size: 36px;
+    margin-bottom: 1rem;
+    padding-bottom: 0.85rem;
+    font-size: 35px;
   }
 
   .content main h1::before {
@@ -797,14 +821,29 @@ main a.xref {
   }
 
   .content main h2 {
-    margin-top: 2.8rem;
+    margin-top: 2.4rem;
+    margin-bottom: 0.65rem;
     font-size: 23px;
   }
 
-  main pre {
+  .content main pre {
+    margin-block: 1.25rem;
     margin-inline: -8px;
     padding: 1rem;
     border-radius: 8px;
+  }
+
+  .diagram-figure {
+    margin-block: 1.5rem 1.75rem;
+  }
+
+  .table-wrapper {
+    margin-block: 1.3rem;
+  }
+
+  .content main table th,
+  .content main table td {
+    padding: 0.65rem 0.6rem;
   }
 
   .diagram-box {
@@ -834,6 +873,15 @@ main a.xref {
     font-size: 10.5pt;
   }
 
+  .content main p,
+  .content main li {
+    line-height: 1.55;
+  }
+
+  .content main p {
+    margin-bottom: 0.75em;
+  }
+
   .content main {
     padding: 0;
   }
@@ -861,7 +909,7 @@ main a.xref {
     widows: 3;
   }
 
-  main pre {
+  .content main pre {
     border: 1px solid #536070;
     box-shadow: none;
   }
