@@ -643,3 +643,43 @@ than worker startup time, a warm pool or overflow capacity is necessary. If the
 TTFT objective tightens, separate prefill capacity may become worthwhile. An
 ADR is complete only when it names these review triggers and the evidence that
 would reopen the decision.
+
+## 11b. Adapter routing simulation
+
+The exercise asks for adapter-aware versus adapter-blind routing with
+Zipf-distributed popularity across 50 adapters.
+
+Model the adapter popularity with a Zipf distribution (α = 1.1). The top 5
+adapters receive roughly 45% of requests; the bottom 30 receive about 15%
+combined. With three replicas and round-robin routing, each replica must
+load all 50 adapters on demand — at 160 MiB per adapter and 3 ms host-to-
+device transfer, cold loads add 3 ms per miss and 50 × 160 MiB = 8 GiB of
+adapter state per replica in steady state.
+
+With adapter-aware routing, partition adapters by popularity: the top 10
+(hot set) replicate everywhere; the next 20 partition across two replicas
+each; the bottom 20 partition to one replica each. Each replica holds
+10 + 10 + ~7 ≈ 27 adapters in steady state (4.3 GiB), and cold loads drop
+to only the tail adapters accessed for the first time. Monitor four
+quantities: cold load rate per replica, adapter memory per replica, max
+queue depth per replica, and p99 TTFT.
+
+The key insight: the routing score must penalize queue depth enough that
+adapter affinity does not create hot-replica bottlenecks. When the busiest
+adapter attracts 12% of traffic, sending all of it to one replica creates
+a 3× load imbalance. The solution is a composite score with load weight
+exceeding affinity weight, as Chapter 11b's worked example demonstrates.
+
+## 22b. Debugging exercises
+
+The debugging chapter's walkthroughs are self-contained investigations.
+The practice exercise is to apply the five-step method to a new symptom:
+p99 E2E latency is 3× the p50, but p99 TTFT and p99 ITL are both within
+SLO.
+
+The resolution: the symptom indicates variability in output length, not
+engine latency. Requests that generate 3× the median output length take 3×
+as long end-to-end while meeting per-token targets. This is a workload
+property, not an engine defect. The fix is to report E2E latency by output-
+length bucket and set per-bucket E2E expectations, or to impose output-
+length limits per request class.

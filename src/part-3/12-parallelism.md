@@ -398,6 +398,24 @@ memory price. The parallel plan is also a failure-domain plan, and both
 reviews deserve to happen on paper, before the first deployment teaches them
 at production cost.
 
+## Quick reference: sizing your first parallel plan
+
+Before working through the full decision procedure, this table gives
+starting points for common model sizes on a single 8-GPU node with fast
+intra-node links. Adjust based on your actual link speeds and workload.
+
+| Model size (BF16) | Fits one GPU? | Starting plan | Why |
+| --- | --- | --- | --- |
+| 7–14B (14–28 GB) | Yes | DP replicas, no TP | Collectives are wasted cost; scale by adding replicas |
+| 30–40B (60–80 GB) | Barely | TP2 or TP4 | Leaves room for KV cache; TP2 on NVLink is nearly free |
+| 65–80B (130–160 GB) | No | TP4 or TP8 | Weights alone need 2–4 GPUs; TP keeps latency low |
+| 140–200B (280–400 GB) | No | PP2 × TP4 or TP8 | Beyond 8 GPUs, cross-node links dictate PP vs. TP |
+| 400B+ MoE (varies) | No | EP across groups | Experts dominate size; see Chapter 13 |
+
+These are starting configurations, not answers. Measure at your target
+batch size and context length before committing. The worked example below
+shows how to evaluate two legal plans against each other.
+
 ## Worked example: TP8 or PP2 × TP4
 
 On one fast eight-GPU island, Plan A uses tensor parallel size eight. Plan B

@@ -103,6 +103,48 @@ lifts qualifying throughput 18 percent cuts saturated unit cost by roughly
 from Chapter 22 converts to this currency before it competes for engineering
 time; that conversion, not the benchmark, is what a roadmap meeting needs.
 
+### TCO worked example: self-hosted versus managed API
+
+Walk the comparison with concrete numbers to see where the breakeven
+lives. These are illustrative; substitute your actual costs.
+
+```text
+Self-hosted (8× H100 node, reserved instance):
+  Hardware:          $30/hr ($21,600/month)
+  Engineering:       ~$5,000/month (fractional SRE, on-call)
+  Networking/misc:   ~$1,500/month
+  Total:             ~$28,100/month
+
+  Qualifying throughput at 60% utilization: 3 req/s average
+  Monthly qualifying requests: 3 × 3600 × 24 × 30 ≈ 7.78M
+  Cost per qualifying request: $28,100 / 7.78M ≈ $0.0036
+
+Managed API (priced per million tokens):
+  Assume $3 per million input tokens, $15 per million output tokens
+  Average request: 1,000 input + 200 output tokens
+  Per-request cost: (1000 × $3 + 200 × $15) / 1M = $0.006
+
+  Monthly cost at 7.78M requests: $46,680
+```
+
+At this volume and utilization, self-hosted costs roughly 60% of the
+managed API. But the picture reverses at low utilization:
+
+```text
+Self-hosted at 15% utilization (nights, weekends):
+  Same $28,100/month, 1.94M qualifying requests
+  Cost per qualifying request: $28,100 / 1.94M ≈ $0.0145
+
+Managed API at same volume:
+  1.94M × $0.006 = $11,640/month
+```
+
+The crossover depends on sustained utilization, engineering cost, and
+burst headroom. Most teams start managed, switch when utilization
+consistently exceeds 40–50%, and keep a managed overflow route for bursts
+that exceed self-hosted capacity. Chapter 16's admission control makes the
+routing decision explicit rather than implicit.
+
 ## Utilization can hide stranded resources
 
 An MoE deployment may show high network use and low expert compute. A

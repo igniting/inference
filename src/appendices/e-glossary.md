@@ -7,6 +7,10 @@ may use the same term differently.
 the target model. It does not include draft or verification cost and is not a
 speedup by itself.
 
+**Adapter** — A small weight delta applied to a base model's parameters at
+inference time. LoRA is the most common form; the adapter modifies a subset of
+layers through low-rank matrix additions without changing the base weights.
+
 **Admission control** — The decision to accept, delay, redirect, or reject new
 work based on capacity and service objectives.
 
@@ -126,6 +130,10 @@ KV state outside its local cache manager.
 
 **Latency percentile** — A value below which a stated percentage of observations
 falls within a defined population and window.
+
+**LoRA** — Low-rank adaptation. A parameter-efficient fine-tuning method that
+adds low-rank matrix pairs to selected layers. At inference time, the adapter
+weights are merged or applied alongside the base model's forward pass.
 
 **Management plane** — Deployment and policy systems that change the service's
 configuration, software, model, or capacity.
@@ -260,7 +268,7 @@ check the source ledger (Appendix F) for the pinned revisions behind each.
 | AWQ | salient-channel-protecting weight-only quantization | Chapter 10 |
 | SmoothQuant | migrating activation range into weight scales for 8-bit | Chapter 10 |
 | Medusa / EAGLE / MTP | multi-token-head and feature-conditioned drafting | Chapter 11 |
-| S-LoRA / Punica | multi-adapter serving with paged adapter state | Chapter 7 |
+| S-LoRA / Punica | multi-adapter serving with paged adapter state | Chapters 7, 11b |
 | Ring Attention | context parallelism by rotating KV stripes around a ring | Chapter 12 |
 | H2O-class schemes | importance-scored token-level KV eviction | Chapter 7 |
 | DistServe / Splitwise / Mooncake | prefill/decode disaggregation and KV transfer designs | Chapters 14–15 |

@@ -8,6 +8,7 @@
 # Part I — The Inference Problem
 - [Part I — The Inference Problem](part-1/index.md)
 
+- [0. Your First Inference Request](part-1/00-first-request.md)
 - [1. Serving Intelligence](part-1/01-serving-intelligence.md)
 - [2. Workloads, SLOs, and Goodput](part-1/02-workloads-slos-goodput.md)
 - [3. How Generative Models Execute](part-1/03-model-execution.md)
@@ -23,6 +24,7 @@
 - [9. Compilation and Graph Execution](part-2/09-compilation.md)
 - [10. Quantization and Numerical Behavior](part-2/10-quantization.md)
 - [11. Speculative and Constrained Decoding](part-2/11-speculation.md)
+- [11b. Adapter Serving and Multi-Tenant Customization](part-2/11b-adapter-serving.md)
 
 # Part III — Scaling Across Accelerators
 - [Part III — Scaling Across Accelerators](part-3/index.md)
@@ -46,6 +48,7 @@
 
 - [21. APIs as Correctness Boundaries](part-5/21-apis.md)
 - [22. Benchmarking and Performance Science](part-5/22-benchmarking.md)
+- [22b. Debugging Inference in Practice](part-5/22b-debugging.md)
 - [23. Observability, Reliability, and Operations](part-5/23-operations.md)
 - [24. Economics, Security, and Architecture Decisions](part-5/24-economics-security.md)
 
@@ -53,9 +56,12 @@
 
 - [A. Mathematical and Systems Notation](appendices/a-notation.md)
 - [B. Hardware and Communication Reference](appendices/b-hardware-reference.md)
+- [B2. Hardware Portability Guide](appendices/b2-hardware-portability.md)
 - [C. Reproducible Benchmark Cookbook](appendices/c-benchmark-cookbook.md)
 - [D. Deployment Patterns](appendices/d-deployment-patterns.md)
+- [D2. Decision Checklists for Practitioners](appendices/d2-decision-checklists.md)
 - [E. Glossary](appendices/e-glossary.md)
 - [F. Source and Reproducibility Ledger](appendices/f-source-ledger.md)
 - [G. Worked Solutions](appendices/g-worked-solutions.md)
+- [H. Optimization Migration Guide](appendices/h-migration-guide.md)
 - [Research and Originality Policy](research-method.md)

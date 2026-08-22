@@ -61,6 +61,18 @@ Its prose, diagrams, examples, analogies, and chapter sequence were not reused.
   [SmoothQuant: Accurate and Efficient Post-Training Quantization for Large
   Language Models](https://arxiv.org/abs/2211.10438), 2022.
 
+## Adapter serving
+
+- Ying Sheng et al.,
+  [S-LoRA: Serving Thousands of Concurrent LoRA Adapters](https://arxiv.org/abs/2311.03285),
+  2023.
+- Chen Liang et al.,
+  [Punica: Multi-Tenant LoRA Serving](https://arxiv.org/abs/2310.18547),
+  2023.
+- Edward J. Hu et al.,
+  [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685),
+  2021.
+
 ## Parallel and MoE systems
 
 - Mohammad Shoeybi et al.,
@@ -146,13 +158,14 @@ client-side renderer cannot load.
 | 9 | `vllm/compilation`, `vllm/v1/cudagraph_dispatcher.py` | `srt/model_executor/runner_backend`, `srt/compilation` |
 | 10 | `model_executor/layers/quantization` | `srt/layers/quantization` |
 | 11 | `vllm/v1/spec_decode`, `vllm/v1/structured_output` | `srt/speculative`, `srt/constrained` |
+| 11b | `vllm/lora`, `vllm/v1/core/sched` (adapter-aware paths) | `srt/lora`, adapter manager paths |
 | 12, 13 | `distributed/parallel_state.py`, `distributed/eplb` | `srt/distributed`, `srt/eplb` |
 | 14 | `distributed/kv_transfer/kv_connector` | `srt/disaggregation` |
 | 17 | scheduler encoder cache, `distributed/ec_transfer` | multimodal managers and encode disaggregation |
 | 18 | diffusion model and runner paths | `multimodal_gen/runtime` |
 | 19 | sleep and weight-transfer paths | scheduler and model-runner weight updaters |
 | 21 | `entrypoints`, `parser`, `structured_output` | `srt/entrypoints`, `srt/constrained` |
-| 22, 23 | benchmark and metrics packages | benchmark, metrics, tracing, and simulator packages |
+| 22, 22b, 23 | benchmark and metrics packages, `/metrics` endpoint | benchmark, metrics, tracing, simulator, and `/get_server_info` |
 
 ## Reproducibility status
 

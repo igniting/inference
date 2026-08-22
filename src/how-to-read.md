@@ -1,25 +1,63 @@
 # How to Read This Book
 
-The book supports three paths.
+The book supports several paths depending on your background and goal.
+
+## If you are new to inference
+
+Start with Chapter 0 ("Your First Inference Request"). It follows one prompt
+through one GPU, end to end, with concrete numbers. Everything after Chapter 0
+refers back to the steps it introduces. If any concept in a later chapter
+feels unmoored, Chapter 0 is the anchor.
 
 ## The systems path
 
-Read front to back. Parts I and II build the single-engine model; Part III
-extends it across accelerators and replicas; Parts IV and V apply it to new
-serving loops and production operation. This path suits engineers designing an
-inference platform.
+Read front to back starting from Chapter 0. Parts I and II build the
+single-engine model; Part III extends it across accelerators and replicas;
+Parts IV and V apply it to new serving loops and production operation. This
+path suits engineers designing an inference platform.
 
 ## The performance path
 
-Read Chapters 2–4, then 6–15, then 22. Keep a real workload trace beside you.
-For every mechanism, write down the expected change in compute, memory traffic,
-communication, queueing, and quality before measuring it.
+Read Chapters 0, 2–4, then 6–15, then 22. Keep a real workload trace beside
+you. For every mechanism, write down the expected change in compute, memory
+traffic, communication, queueing, and quality before measuring it.
 
 ## The operations path
 
-Read Chapters 1, 2, 5–7, 14–16, and 21–24. This path emphasizes service
+Read Chapters 0, 1, 2, 5–7, 14–16, and 21–24. This path emphasizes service
 semantics, overload, distributed state, routing, observability, security, and
 cost.
+
+## The practitioner fast-track
+
+If you already run vLLM or SGLang in production and want to optimize, read
+Chapter 0 to calibrate, then jump to the problem-oriented table below. After
+solving your immediate problem, read Chapter 22B (debugging) and Appendix D2
+(decision checklists) to build a systematic approach.
+
+## Problem-oriented navigation
+
+If you have a specific problem to solve, start here instead of reading
+front to back.
+
+| Problem | Start with | Then read |
+| --- | --- | --- |
+| "My TTFT is too high under load" | Ch. 6 (scheduling, chunked prefill) | Ch. 7 (KV budget), Ch. 14 (P/D disaggregation), Ch. 22 (benchmark method) |
+| "I need to serve a model that does not fit on one GPU" | Ch. 4 (hardware topology), Ch. 12 (parallelism) | Ch. 13 (MoE), Appendix B (memory worksheet) |
+| "I want to add LoRA adapters in production" | Ch. 11B (adapter serving) | Ch. 7 (paged adapter state), Ch. 16 (routing with adapters) |
+| "Latency spikes during decode" | Ch. 6 (preemption), Ch. 8 (attention backends) | Ch. 9 (graph buckets and padding), Ch. 22 (isolating variables) |
+| "I need structured JSON output reliably" | Ch. 11 (constrained decoding) | Ch. 21 (API contracts, grammar backends) |
+| "How do I benchmark properly?" | Ch. 22 (performance science) | Appendix C (benchmark cookbook), Ch. 2 (SLO definitions) |
+| "Cache hit rates are low across replicas" | Ch. 15 (distributed caching) | Ch. 16 (cache-aware routing), Ch. 7 (prefix cache) |
+| "I need to serve on AMD or non-NVIDIA hardware" | Appendix B2 (hardware portability) | Ch. 4 (topology), Ch. 8 (backend selection), Ch. 9 (compilation) |
+| "Deploying to production for the first time" | Ch. 0 (first request), Ch. 23 (operations) | Ch. 21 (API boundaries), Appendix D (deployment patterns) |
+| "I need to serve multimodal or diffusion models" | Ch. 17 (multimodal), Ch. 18 (diffusion) | Ch. 14 (E/P/D disaggregation) |
+| "How do I debug a serving issue?" | Ch. 22B (debugging guide) | Ch. 23 (observability), Appendix D2 (decision checklists) |
+| "Cost per request is too high" | Ch. 24 (economics) | Ch. 10 (quantization), Ch. 11 (speculation), Ch. 14 (disaggregation) |
+
+Each row leads to a self-contained reading sequence. The first column
+is the starting point; subsequent chapters fill in the mechanisms and
+evidence the solution requires.
 
 ## A recurring worksheet
 
