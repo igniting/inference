@@ -40,7 +40,7 @@ after the last GPU user finishes.
 
 The least visible delay in this example is the cache-aware routing decision.
 The chosen replica saves 4,000 prompt tokens but has 450 ms of queued prefill;
-an idle replica could recompute them in 280 ms. Locality is therefore a loss.
+an idle replica could recompute them in 240 ms. Locality is therefore a loss.
 The trace needs both `queue_age_at_assignment` and `matched_prefix_tokens` to
 make that diagnosis possible.
 

@@ -65,10 +65,11 @@ expected reuse value
 ```
 
 The three costs are computable for real state, and they are not close.
-Recompute price comes straight from Chapter 4's constant: at 0.06 ms per
-token, recomputing a 40,000-token document costs 2.4 seconds of GPU time.
-Transfer price uses Chapter 14's KV link: the document's 40,000 × 320 KiB =
-12.2 GiB move in about 555 ms at 22 GiB/s. Retention price is the tier's
+Recompute price comes straight from Appendix G's standing constant: at
+0.06 ms per token, recomputing a 40,000-token document costs 2.4 seconds of
+GPU time. Transfer price uses Chapter 14's KV link: the document's
+40,000 × 320 KiB = 12.2 GiB move in about 565 ms at 22 GiB/s including the
+12 ms setup. Retention price is the tier's
 capacity times how long the state waits — 12.2 GiB parked in host memory is
 memory that cannot back active sequences. So for long documents the ordering
 is stable across any plausible reuse probability: transfer beats recompute by
@@ -88,7 +89,7 @@ The three prices side by side, using the constants above:
 | --- | --- | --- | --- |
 | 500 tokens | 30 ms | 156 MiB ≈ 7 ms + setup | recompute unless hits are certain |
 | 6,000 tokens | 360 ms | 1.83 GiB ≈ 85 ms + setup | transfer pays on second use |
-| 40,000 tokens | 2.4 s | 12.2 GiB ≈ 555 ms | always retain something |
+| 40,000 tokens | 2.4 s | 12.2 GiB ≈ 565 ms | always retain something |
 
 The middle row is Chapter 14's boundary seen from the cache's side of the
 glass, and the setup term matters more than the byte count for small state:

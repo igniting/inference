@@ -303,8 +303,8 @@ GPU.
 The mask's size is worth pricing once. A 128k vocabulary needs 128k bits of
 legality per position — 16 KiB as a packed bitmask, about three percent of
 the 512 KB logits row Chapter 5 counted per sequence per step. At batch 64 with
-three speculative positions plus the bonus token, five rows per request is
-5 MiB of masks moving toward the GPU each step: small against the step's
+three speculative positions plus the bonus token, four rows per request is
+4 MiB of masks moving toward the GPU each step: small against the step's
 total traffic, but not free, and produced by CPU-side parser state updates
 that must keep up with the engine's step rate. Compilation has its own cost
 curve: compiling a large JSON Schema can take longer than the first request's

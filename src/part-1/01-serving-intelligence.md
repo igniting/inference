@@ -425,15 +425,15 @@ choice, and cancellation as scheduled work.
 
 Suppose a 6,000-token document question reaches a router. Replica A already
 has 4,000 tokens of the document cached but has 450 ms of queued prefill
-work. Replica B is idle and can recompute those 4,000 tokens in 280 ms. A
+work. Replica B is idle and can recompute those 4,000 tokens in 240 ms. A
 router that sees only cache locality sends the request to A and adds at
-least 170 ms to the user's wait.
+least 210 ms to the user's wait.
 
 Walk the comparison. On replica B, the user waits the full recomputation:
-280 ms of prefill before their own tokens begin producing output. On replica
+240 ms of prefill before their own tokens begin producing output. On replica
 A, the user first waits behind 450 ms of work that arrived earlier. Even if
 the cached prefix reduced replica A's remaining work to nearly nothing, the
-queue alone exceeds replica B's entire prefill by 170 ms. The cache saved
+queue alone exceeds replica B's entire prefill by 210 ms. The cache saved
 computation that was not the bottleneck; the queue was.
 
 Cache value is therefore conditional on queue state, and a locality score
@@ -468,7 +468,7 @@ A useful artifact is a table with one row per boundary and one column per
 recorded property, so that any row with an empty owner cell marks a state
 object nobody is responsible for releasing. Then compare a replica with a
 4,000-token match and 450 ms queue against an idle replica that recomputes
-the prefix in 280 ms. State which replica you choose and which two metrics
+the prefix in 240 ms. State which replica you choose and which two metrics
 would reveal a wrong choice in production. A worked answer is in [Appendix
 G](../appendices/g-worked-solutions.md#1-request-trace).
 

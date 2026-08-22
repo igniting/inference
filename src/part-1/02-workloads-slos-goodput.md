@@ -167,9 +167,9 @@ Percentile claims inherit the population they are computed over, and token
 gaps and requests are different populations. A small example makes the gap
 impossible to ignore.
 
-Suppose two requests are observed. Request A streams ten tokens with gaps of
+Suppose two requests are observed. Request A streams eleven tokens with gaps of
 40 ms each. Request B streams two tokens, and its single inter-token gap lasts
-500 ms. Pool all twelve gaps together and exactly one of them exceeds 400 ms:
+500 ms. Pool all eleven gaps together and exactly one of them exceeds 400 ms:
 the token-gap p99 sits near 500 ms, but the token-gap p90 is a comfortable
 40 ms. Now count by request instead: one of the two requests contained a
 half-second stall, so half of the users experienced it. No per-token
@@ -177,7 +177,7 @@ percentile below the extreme tail can express that.
 
 TPOT averages the same evidence differently still. Request A contributes ten
 40 ms gaps; request B contributes one 500 ms gap. The token-weighted average
-is about 75 ms, because A's many well-behaved tokens outnumber B's single bad
+is about 80 ms, because A's many well-behaved tokens outnumber B's single bad
 one. The user-weighted story is that every second response stalled. None of
 these numbers is wrong; each answers a different question. The failure mode
 to avoid is quoting whichever one flatters the system, which is why the

@@ -177,7 +177,7 @@ The ceiling falls out of the budget:
 So roughly a 3,400-token chunk is the largest this service can mix into a step
 without breaking its decode promise. The arithmetic cuts both ways: a team
 that raises the chunk to 8,192 for prefill throughput has silently rewritten
-the SLO — mixed steps now take about 307 ms, twice the inter-token
+the SLO — mixed steps now take about 317 ms, twice the inter-token
 budget — and a team that tightens the SLO to 100 ms must shrink chunks to
 about 2,000 tokens and accept more scheduling overhead. Chunk size is where
 the throughput-versus-latency exchange becomes a single integer, and the

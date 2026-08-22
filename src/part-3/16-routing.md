@@ -151,7 +151,7 @@ R1 a required adapter it does not hold: assume loading that adapter costs
 adapter term would have sent every subsequent adapter-sharing request there
 too, paying 800 ms each time until the adapter warmed. Transfer works the
 same way in disaggregated deployments: Chapter 14 priced a 6,000-token KV
-move at ~97 ms, which is exactly the kind of term that belongs here rather
+move at ~95 ms, which is exactly the kind of term that belongs here rather
 than being discovered after admission.
 
 The risk term prices the telemetry budget from the previous dive: a

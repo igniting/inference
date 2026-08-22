@@ -127,7 +127,7 @@ cleanup.
 If transfer fails, the system can retry, choose another decode worker, recompute
 prefill, or fail the request. The policy should depend on the remaining deadline
 and expected recompute cost. The costs are computable. Retrying the transfer
-costs another ~97 ms of link time plus whatever queue delay applies;
+costs another ~95 ms of link time plus whatever queue delay applies;
 recomputing the prefill costs the full ~230 ms again plus the freed worker's
 opportunity cost; failing the request spends everything already paid. Against
 the 600 ms TTFT budget, a request that has already waited 200 ms in queues
@@ -147,12 +147,12 @@ and each chunk's readiness is tracked separately until a final
 
 The overlap is worth real milliseconds. Suppose chunks complete every 2,000
 tokens. The first chunk is ready at 20 + 0.035 × 2,000 = 90 ms and its
-~610 MiB take 12 + 610 MiB / 22 GiB/s ≈ 41 ms on the link — finished at
-~131 ms, while prefill still has 140 ms of compute left. The last chunk
+~610 MiB take 12 + 610 MiB / 22 GiB/s ≈ 39 ms on the link — finished at
+~129 ms, while prefill still has 140 ms of compute left. The last chunk
 leaves at ~230 ms and needs only its own slice of link time, so the
-pipeline's transfer tail shrinks from the serial 97 ms to roughly
-12 ms plus the final chunk's bandwidth time, about 30 ms total. End-to-end,
-chunked transfer lands near 260 ms instead of 327 ms — without changing a
+pipeline's transfer tail shrinks from the serial 95 ms to roughly
+12 ms plus the final chunk's bandwidth time, about 40 ms total. End-to-end,
+chunked transfer lands near 270 ms instead of 325 ms — without changing a
 single byte moved. The trade is protocol state: partial transfers hold
 reservations longer, and every retirement path must clean up pending chunk
 bookkeeping or leak it.
@@ -258,7 +258,7 @@ bottleneck within minutes.
 
 The transfer stage sits between them with its own queue and its own capacity:
 at 12 ms setup plus 22 GiB/s, concurrent transfers share a pipe that a
-6,000-token prompt occupies for ~97 ms. Ten concurrent such transfers
+6,000-token prompt occupies for ~95 ms. Ten concurrent such transfers
 serialize into a second of link time. Admission should treat transfer
 bandwidth the way Chapter 5 treats GPU occupancy — a schedulable resource
 with its own queue, not a free side effect of finishing prefill.
@@ -272,11 +272,11 @@ may benefit most from separation.
 
 A conditional router compares local execution with remote prefill plus transfer
 and queueing. The worked example gives the comparison shape: remote costs
-~230 ms prefill + ~97 ms transfer + a decode-queue wait; colocated costs
+~230 ms prefill + ~95 ms transfer + a decode-queue wait; colocated costs
 ~230 ms prefill on a worker whose decode neighbors each absorb an
 SLO-breaching stall. The transfer is worth it when the stall it removes —
 spread across the sequences that would have shared the worker — exceeds the
-97 ms and the added queueing. Short prompts flip the comparison: at 500
+95 ms and the added queueing. Short prompts flip the comparison: at 500
 tokens, prefill is ~38 ms and the KV state only ~156 MiB, but the transfer
 setup alone is 12 ms, nearly a third of the phase it enables.
 
@@ -287,7 +287,7 @@ phase ratios change. The comparison the router runs, per request class:
 | --- | --- | --- | --- |
 | short prompt, no cache hit | small prefill, no transfer | setup-dominated transfer | colocated |
 | short prompt, cached on decode worker | full prefill again | prefix reuse, no or tiny send | remote (cache) |
-| long prompt, tight ITL neighbors | stall breaches neighbor ITL | 97 ms boundary + queueing | remote |
+| long prompt, tight ITL neighbors | stall breaches neighbor ITL | 95 ms boundary + queueing | remote |
 | long prompt, idle cluster | 230 ms uncontended | same + transfer tail | colocated |
 
 The last row is the honest one: under low load, disaggregation adds latency
@@ -382,27 +382,27 @@ only thing that crosses.
 Use `prefill_ms = 20 + 0.035 × tokens`, a 45 ms decode step, and a KV link with
 12 ms setup plus payload at 22 GiB/s. The 6,000-token Atlas prompt creates about
 1.83 GiB of KV state — 6,000 × 320 KiB = 1,875,000 KiB. Ideal transfer is
-therefore roughly 97 ms, compared with
+therefore roughly 95 ms, compared with
 about 230 ms of prefill.
 
 Walk the placement decision for one such request. Remote: 230 ms prefill
-(assuming a free prefill worker) + 97 ms transfer + one decode step of 45 ms
-before the first token — about 372 ms of pipeline time before output starts,
+(assuming a free prefill worker) + 95 ms transfer + one decode step of 45 ms
+before the first token — about 370 ms of pipeline time before output starts,
 against a 600 ms TTFT budget that leaves roughly 230 ms for both queues.
-Chunked sends at 2,000-token granularity pull that to roughly 260 ms — the
-transfer overlaps prefill instead of following it — and hand back 67 ms of
+Chunked sends at 2,000-token granularity pull that to roughly 315 ms — the
+transfer overlaps prefill instead of following it — and hand back 55 ms of
 queue budget without moving one byte less.
 Colocated on an otherwise idle worker: 230 ms and no transfer — but "idle"
 is the assumption that fails under load. The same request placed beside
 eight decoding sequences inflicts a 230 ms stall on all of them; eight
 sequences × one breached 150 ms ITL budget is the interference cost the
-transfer is buying down. Disaggregation wins here not because 97 ms is
+transfer is buying down. Disaggregation wins here not because 95 ms is
 cheap but because the colocated alternative is worse for everyone sharing
 the worker.
 
 Now give the transfer a failure. If the link drops at the moment prefill
-finishes, the request has ~372 ms of pipeline time committed and roughly 230 ms
-of TTFT budget left. A retry costs another 97 ms plus queueing — feasible if
+finishes, the request has ~370 ms of pipeline time committed and roughly 230 ms
+of TTFT budget left. A retry costs another 95 ms plus queueing — feasible if
 the decode reservation survived, impossible if it was released. Recomputation
 costs 230 ms of prefill again plus re-transfer — over budget. The right
 policy at this point is a bounded retry with reservation held; the wrong time

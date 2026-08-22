@@ -228,7 +228,7 @@ execution exercises one signature, so readiness should require the *set*, not
 sample it. Price matters too: a full forward pass every five seconds steals a
 batch slot from paying traffic on every replica — at Atlas's 45 ms step, a
 health request landing each interval is a permanent tax of roughly one step in
-twenty-two at modest load. Frequent cheap probes plus infrequent expensive
+a hundred at modest load. Frequent cheap probes plus infrequent expensive
 ones beats one probe asked to do both.
 
 ## Treat the serving image as a measured artifact
