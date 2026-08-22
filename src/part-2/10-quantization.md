@@ -134,6 +134,27 @@ roughly 4.12 effective bits per value. At group size 64 the overhead is 6
 percent. Finer granularity buys accuracy with bytes and with kernel-side
 conversion work.
 
+### Three families of weight-only methods
+
+Round-to-nearest with good groups — the tile walk above — is only the
+baseline. The field's weight-only methods divide into three families by how
+they fight that systematic per-group error, and the names are worth knowing
+because the trade-offs travel with them:
+
+| Family | Mechanism | Needs activation data | Characteristic failure |
+| --- | --- | --- | --- |
+| RTN + groups (baseline) | round to the fitted grid | no | outlier stretches one scale, taxes its group |
+| error-compensation (GPTQ lineage) | quantize sequentially, push each weight's rounding error into not-yet-quantized weights via second-moment statistics of the layer's inputs | yes — a calibration sample of activations | accumulated compensation degrades on out-of-distribution inputs |
+| salient-channel protection (AWQ lineage) | find channels activations actually amplify; rescale them to absorb quantization error where it hurts least | yes — activation magnitudes | protection mis-ranks channels when the workload shifts |
+
+Both calibrated families spend a calibration pass to buy back accuracy at
+fixed bit width, and both inherit the distribution-shift risk described
+above: their statistics describe the calibration set, not the model. The
+practical interview-grade summary: at 8 bits the families converge and the
+format choice dominates; at 4 bits the family choice is worth more than the
+group-size dial, and the honest evaluation is Chapter 22's — same trace,
+same quality gates, differences classified before conclusions.
+
 ## What can be quantized?
 
 **Weight-only quantization** compresses model parameters while keeping

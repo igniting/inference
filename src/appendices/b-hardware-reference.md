@@ -87,6 +87,32 @@ For each rank, fill in:
 Run the worksheet at the largest legal shape and during warm-up. Peak phases
 can occur in a different order from steady serving.
 
+## Order-of-magnitude classes
+
+Interviews and design reviews move faster when orders of magnitude are
+already in your head. These are *classes*, not product claims — each
+generation moves the boundaries — but the ratios between rows are the durable
+part. Treat them as declared planning figures in the book's sense.
+
+| Quantity | Class | Notes |
+| --- | --- | --- |
+| Accelerator HBM bandwidth | 2–4 TB/s | the number that sets decode's roofline |
+| Dense BF16/FP16 arithmetic peak | ~1–2 PFLOPS per accelerator | tensor-core peak; MFU divides against this |
+| Intra-island link bandwidth | 400–900 GB/s per direction | NVLink-class fabrics |
+| Cross-host network | tens to hundreds of GB/s (RDMA) | an order below intra-island |
+| PCIe host path | tens of GB/s | why host staging is a copy, not a transfer |
+| Kernel launch overhead | 3–10 µs | why graphs exist (Chapter 9) |
+| Host–device sync | ~10 µs | why per-step syncs are budgeted, not free |
+| Inter-region network RTT | tens of milliseconds | why Chapter 16 routes before crossing regions |
+
+Two habits make the table useful rather than trivia. First, keep the
+*ratios*: intra-island bandwidth is roughly a hundred times the host path,
+and arithmetic peak is roughly a thousand times HBM bytes per second — those
+two ratios explain most of this book's architecture. Second, re-derive
+crossovers rather than memorizing them: peak divided by bandwidth gives the
+arithmetic-intensity knee (Chapter 4), and it moves every generation even
+when the ratio structure does not.
+
 ## Common traps
 
 - Measuring device-to-device bandwidth without the application's concurrent

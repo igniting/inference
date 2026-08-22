@@ -241,3 +241,29 @@ lower tier later, often near eviction.
 
 **Write-through cache** — A policy that writes state to a lower tier as it is
 created or admitted to the upper tier.
+
+## Field names
+
+The book teaches concepts under system-neutral names so the reasoning
+outlives any project's vocabulary. This map connects them to the canonical
+names used in papers, engines, and interview conversations. Names evolve;
+check the source ledger (Appendix F) for the pinned revisions behind each.
+
+| Field name | Book concept | Where |
+| --- | --- | --- |
+| PagedAttention | logical-to-physical block paging of KV state | Chapter 7 |
+| Continuous batching / iteration-level scheduling | membership change between engine steps | Chapter 6 |
+| Orca | the paper that established the above | Chapter 6 |
+| Sarathi-Serve / chunked prefill | mixing bounded prefill chunks into decode steps | Chapter 6 |
+| FlashAttention | tiled, online-softmax attention that never materializes full attention | Chapter 8 |
+| GPTQ | error-compensating weight-only quantization | Chapter 10 |
+| AWQ | salient-channel-protecting weight-only quantization | Chapter 10 |
+| SmoothQuant | migrating activation range into weight scales for 8-bit | Chapter 10 |
+| Medusa / EAGLE / MTP | multi-token-head and feature-conditioned drafting | Chapter 11 |
+| S-LoRA / Punica | multi-adapter serving with paged adapter state | Chapter 7 |
+| Ring Attention | context parallelism by rotating KV stripes around a ring | Chapter 12 |
+| H2O-class schemes | importance-scored token-level KV eviction | Chapter 7 |
+| DistServe / Splitwise / Mooncake | prefill/decode disaggregation and KV transfer designs | Chapters 14–15 |
+| DeepEP | expert-parallel all-to-all communication | Chapter 13 |
+| EPLB | expert-parallel load balancing | Chapter 13 |
+| vLLM, SGLang, TensorRT-LLM | engines realizing most of the above | throughout |

@@ -187,6 +187,47 @@ this — how long blocks wait between their request ending and their last use
 provably finishing — and an age that grows with load is an engine telling you
 its proofs are falling behind its execution.
 
+Two eviction refinements round out the picture. First, eviction policy
+operates at block granularity here, but token-level policies also exist:
+score each cached token by its estimated future importance (attention-magnitude
+schemes are the canonical example) and drop low-scoring positions while
+keeping the block. They trade correctness structure for capacity — a dropped
+token changes attention outputs for everything after it, so unlike block
+eviction under prefix identity, the result is no longer equivalent to a
+cache miss. Fine for lossy compression deployments that accept it; wrong for
+anything that promised Chapter 21-style output equivalence. Second, eviction
+under adapters must consider the adapter dimension too: a block reused under
+a different adapter is not a hit at all, which is the subject of the next
+section.
+
+### Serving many adapters at once
+
+Adapter serving is where cache identity becomes a scheduling problem. Take a
+low-rank adapter at rank 16 on Atlas's hidden size of 8,192: each layer
+carries two matrices of `8192 × 16` BF16 values, `2 × 8192 × 16 × 2 = 512 KiB`
+per layer, about 40 MiB across 80 layers — four orders of magnitude smaller
+than the 140 GB base model. That ratio is the whole economics of adapter-dense
+serving: a fleet can hold thousands of adapters resident for the cost of one
+extra base replica, and Chapter 16's 800 ms cold-adapter load is not I/O wait
+but the price of not having the weights paged where the batch needs them.
+
+The serving designs follow from the arithmetic. Because an adapter's working
+set is tiny and its compute is two thin matrix products per layer, engines
+keep every adapter resident and batch across *different* adapters in one
+step: the base weights are read once regardless, each sequence adds its own
+low-rank products, and the per-request extra arithmetic is a few percent of
+the step. The hard parts are the ones this chapter already built for KV
+state: the activation buffers the low-rank paths need must be paged and
+sized per batch composition, the block table must carry which adapter each
+sequence runs under so a mixed step never mixes identities, and CUDA-graph
+capture (Chapter 9) must either fix the adapter set per graph or read
+pointers dynamically — a captured graph with baked adapter weights silently
+serves the wrong model, the same failure class as Chapter 19's stale-weight
+caches. When an interviewer asks how one replica can serve a thousand
+customer-specific models, the answer is this section: adapters make weights
+a per-request cache problem, and everything from Chapter 7 applies with
+40 MiB objects instead of gigabyte ones.
+
 ## Reusing a prefix
 
 The support assistant in Chapter 1 begins every conversation with the same

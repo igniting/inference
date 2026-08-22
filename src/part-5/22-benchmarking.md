@@ -137,6 +137,50 @@ costs. Four traps account for most wrong microbenchmark numbers:
   "latency *and numerical error*" — treat max-abs and distributional deltas as
   first-class outputs, not footnotes.
 
+### Estimating capacity before measuring
+
+Every serving team asks some version of the same question in a design review:
+*roughly what will this configuration sustain?* Benchmarking answers it
+eventually; arithmetic answers it now, well enough to know whether the plan
+is plausible. Walk the whole estimate for one Atlas TP4 island using only
+frozen and declared numbers.
+
+**Decode throughput.** A model step reads the 35 GB weight shard plus each
+active sequence's state. Against a declared memory path of ~3 TB/s, weights
+alone imply `35 / 3 ≈ 12 ms` of streaming; adding 32 sequences at 2,000
+context tokens (`32 × 2000 × 80 KiB ≈ 5 GiB`, about 1.7 ms more) sets a
+roofline floor near 14 ms. Atlas's declared step is 45 ms — about a third of
+the roofline — which is what real engines cost once launch overhead, attention
+addressing, sampling, and collectives join the streaming. Take the 45 ms as
+given: throughput is `32 tokens / 0.045 s ≈ 700` output tokens per second per
+replica at batch 32.
+
+**Concurrency.** KV capacity caps resident sequences before speed does:
+`35 GiB / 0.61 GiB` per 8,000-token sequence ≈ 57, so batch 32 sits at 56
+percent occupancy — headroom, not accident, given Chapter 6's preemption
+arithmetic.
+
+**Cross-check with utilization.** The same step in arithmetic terms is
+`2 × 70 GFLOP × 32 ≈ 4.5 TFLOP` per 45 ms across four accelerators of ~1
+PFLOPS-class peak: roughly two to three percent MFU, exactly the decode
+ceiling Chapter 4 derived from intensity. And the frozen prefill cost
+back-solves instructively: `prefill_ms(2000)` implies moving about 280 TFLOP
+in 90 ms on the same island — near three-quarters of peak, an aggressive
+large-batch figure that says Atlas's constants describe a *well-tuned*
+system. When your measured prefill MFU lands far below that, the gap is a
+diagnosis queue, not a mystery.
+
+**Assemble.** At ~200 output tokens per response, decode alone sustains
+about `700 / 200 ≈ 3.5` requests per second per replica; applying Chapter 2's
+operating-utilization discipline and TTFT admission trims that to a few
+qualifying requests per second — within a factor of two of Chapter 24's
+declared operating point, which is precisely the accuracy band a
+pre-benchmark estimate should claim. The estimate's real products are the
+*constraints*: concurrency bounded by KV bytes, throughput by step time,
+TTFT by prefill-plus-queue, and each bound naming the knob that would move
+it. Benchmarks then refine numbers you can already defend; without the
+estimate, they refine numbers you cannot.
+
 ## Reproduce the workload
 
 A benchmark card should record arrival process, input and output length

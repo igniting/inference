@@ -303,6 +303,30 @@ correlation, and the SLO clauses, which is exactly why "the service does 100
 requests per second" is incomplete until its workload and contract travel
 with it.
 
+### Why the knee sits below 100 percent
+
+The knee's position is not a policy choice; it falls out of utilization
+arithmetic. Let ρ (Appendix A) be offered work divided by service capacity.
+For random arrivals, the simplest queueing model — one shared queue,
+exponentially spaced arrivals, exponential service — puts average waiting at
+roughly `ρ / (1 − ρ)` service periods. The assumptions matter (real serving is
+batched, correlated, and bimodal between prefill and decode), but the shape of
+the curve survives every correction: waiting is proportional to ρ near zero
+and diverges as ρ → 1.
+
+Walk it in Atlas units. Suppose the knee experiment above found capacity near
+100 requests per second, so one request occupies the system about 10 ms of
+exclusive service time on average. At ρ = 0.5 the model predicts about `0.5 /
+0.5 = 1` period of waiting; at ρ = 0.8 about four periods; at ρ = 0.9 about
+nine. Going from half-used to 90-percent-used multiplies queue delay roughly
+ninefold while raising throughput only 80 percent — and since TTFT includes
+that delay, goodput collapses long before throughput does, which is exactly
+what the 120-row in the table showed. This is why operating targets sit at
+modest utilization: the last 20 percent of capacity costs more latency than
+it returns work, and headroom is what absorbs arrival bursts. Any interviewer
+asking "why not run hotter?" is really asking whether you can derive this
+curve and name where its simplifications break.
+
 Goodput often changes the winner in an architecture comparison. A large batch
 
 The qualification clause is doing real work, so it deserves the same care as

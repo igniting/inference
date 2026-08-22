@@ -15,6 +15,7 @@ capacity decision.
 | `B_tok` | scheduled token budget per engine step | tokens |
 | `W` | average time in the system | seconds |
 | `Q` | average number of requests in the system | count |
+| `rho` | utilization: offered work divided by service capacity | dimensionless |
 
 For a stable system, Little's Law relates average concurrency, arrival rate,
 and average time:
@@ -26,7 +27,11 @@ Q = λ · W
 The relationship is useful for checking measurements. If 20 requests arrive
 per second and average end-to-end latency is 2 seconds, about 40 requests should
 be in the system on average. It does not predict tail latency or guarantee
-stability.
+stability. Delay depends on utilization `rho = lambda / capacity`: the
+simplest queueing model with random arrivals puts average waiting time near
+`rho / (1 - rho)` service periods, so waiting stays modest until utilization
+approaches one and then explodes. Capacity plans that target high utilization
+are buying queue delay with idle capacity they no longer have.
 
 ## Latency
 

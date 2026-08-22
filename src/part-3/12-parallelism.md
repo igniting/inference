@@ -124,6 +124,28 @@ which coupling their other dimensions tolerate — and on whether their
 attention backend implements the stripe-and-reduce path at all, which is
 Chapter 8's registry question wearing a parallelism costume.
 
+### Ring attention: the long-context variant
+
+Prefill at extreme context stresses the position-split scheme differently,
+because every query attends to every key — a rank holding the middle stripe
+of a 131,072-token context needs all of it, not just its neighbors. **Ring
+attention** is the standard resolution: split positions across ranks, then
+rotate the key-value stripes around a ring so that each rank computes its
+queries against every stripe exactly once while activations stay home. The
+cost is pure data movement, and Appendix A prices it. Per rank, Atlas KV for
+131,072 tokens is `80 KiB × 131072 = 10 GiB`; moving it in segments of 8,192
+tokens means each hop carries 0.625 GiB, and with four ranks each rank
+receives three hops — roughly `3 × (20 µs + 0.625 GiB / 450 GB/s)` ≈
+3 × 1.5 ms ≈ 4.5 ms per layer of exposed transfer if nothing overlaps with
+compute. Against a prefill step's large matrix work, overlap hides most of
+that; what remains scales linearly in context length and inversely in ring
+size, which is why long-context serving treats inter-rank bandwidth as the
+binding resource, and why doubling context without widening the ring doubles
+the attention-communication tax per token. The scheme composes with the rest
+of this chapter: heads can still be tensor-sharded within a rank, and the
+partial softmax statistics each stripe produces must combine exactly as the
+decode-context path above requires.
+
 ### Pricing one all-reduce
 
 Appendix A's transfer model makes the cost concrete: a transfer of `S` bytes

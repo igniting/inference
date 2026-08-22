@@ -145,6 +145,32 @@ roofline's knee, which is why Chapter 3 called it a streaming workload, and
 why the scheduler's batch composition is a hardware-efficiency decision as
 much as a latency one.
 
+### Naming the ceiling: utilization and MFU
+
+The field compresses this roofline reasoning into one number: **model FLOPs
+utilization** (MFU) — achieved useful arithmetic divided by the accelerator's
+peak, where "useful" counts the two operations per parameter that the math
+requires and ignores everything the hardware wastes on data movement,
+padding, or unsupported shapes. The vocabulary earns its keep because it
+makes expectations quantitative before any measurement. Prefill is large,
+dense matrix work executed largely on tensor cores; declared planning ranges
+for well-configured serving put it in the tens of percent — call it 30 to 60.
+Decode at batch 1 has intensity near 1 against a crossover in the hundreds,
+so its MFU ceiling is roughly `batch / crossover` — for the numbers above,
+under half a percent at batch 1, a few percent by batch 16. When someone
+reports decode MFU of 40 percent, they have either measured prefill, misused
+the term, or built something extraordinary; asking which is a better question
+than believing the number.
+
+Two disciplines follow. First, quote MFU only with its regime: prefill-MFU
+and decode-MFU are different quantities with different ceilings, and neither
+is comparable across batch sizes without the intensity context. Second, use
+the arithmetic to set expectations *before* benchmarking: if a planned
+configuration implies 60 percent decode MFU at batch 4, the plan contradicts
+arithmetic, not tuning. Chapter 8 returns to the tile level — where tensor
+cores consume whole rectangles of data and explain why the crossover exists —
+and Chapter 22 turns these ceilings into full capacity estimates.
+
 Prefill tells the opposite story. A 1,000-token prompt performs a thousand
 positions' arithmetic per weight read, putting its intensity near a thousand —
 comfortably above typical crossovers. The same weights, the same device, and

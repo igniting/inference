@@ -257,6 +257,33 @@ twelve, the pool must already hold enough ready workers to absorb the entire
 spike, because *none* of the reactive capacity arrives in time. Twelve-minute
 startup converts elasticity from a control loop into a procurement decision.
 
+### Scale to zero, honestly priced
+
+The logical extreme of elasticity is serving nothing when traffic is absent
+and paying only for what runs — attractive for bursty internal tools and
+multi-tenant platforms, and it lives or dies on the readiness sequence
+above. What can actually be made cheap? Weights are the bulk: pre-staged on
+local disk and warmed into the page cache, they load in seconds rather than
+minutes — Chapter 19's sleep levels already priced the extreme at a ~3 s host
+snapshot against a multi-minute cold envelope. Compilation is next: captured
+graphs and tuned kernels serialize as artifacts (Chapter 9) if their capture
+was deterministic in shape set and environment, restoring in seconds;
+recapture costs minutes. Distributed setup and health execution take
+seconds more. The floor for a large model is therefore tens of seconds to
+low minutes even with everything staged — dominated by weight streaming and
+collective bring-up — and *nothing about the KV cache survives*, because
+session state cannot be snapshotted into an artifact.
+
+That last clause sets the product contract. Scale-to-zero serves cold-start
+tolerant traffic: batch jobs, scheduled workloads, tenants whose first
+request may be slow but whose tenth is warm. Interactive traffic needs the
+warm-pool arithmetic above instead, and the honest comparison is per tier:
+pool cost per hour versus lost-or-delayed requests during ramp. An
+interviewer probing "why doesn't everyone scale to zero?" wants exactly this
+split — what stages compress to seconds, which one dominates what remains,
+and why the state that makes inference *good* is precisely the state that
+cannot ride in the artifact.
+
 Promote the same immutable artifact through staging and production. Environment
 configuration may change endpoints and capacity, but rebuilding between stages
 removes much of the evidence gathered by the canary. Store the release identity
