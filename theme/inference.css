@@ -1,13 +1,45 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&display=swap");
+/* Self-hosted fonts (latin subsets, variable weight) ---------------- */
+
+@font-face {
+  font-family: "Literata";
+  src: url("../assets/fonts/literata.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Literata";
+  src: url("../assets/fonts/literata-italic.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("../assets/fonts/inter.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../assets/fonts/jetbrains-mono.woff2") format("woff2");
+  font-weight: 400 600;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
-  --content-max-width: 790px;
+  --content-max-width: 760px;
   --sidebar-target-width: 318px;
   --page-padding: 28px;
   --menu-bar-height: 58px;
-  --body-font: "Source Serif 4", Charter, "Bitstream Charter", Georgia, serif;
-  --utility-font: "IBM Plex Sans", Inter, system-ui, sans-serif;
-  --mono-font: "IBM Plex Mono", "Source Code Pro", Consolas, monospace;
+  --body-font: "Literata", Charter, "Bitstream Charter", Georgia, serif;
+  --utility-font: "Inter", system-ui, -apple-system, sans-serif;
+  --mono-font: "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace;
   --trace-blue: #245dcc;
   --state-teal: #087e78;
   --trace-faint: rgba(36, 93, 204, 0.14);
@@ -93,7 +125,7 @@ html {
 
 body {
   font-family: var(--body-font);
-  font-size: 17px;
+  font-size: 17.5px;
   font-optical-sizing: auto;
   font-kerning: normal;
   text-rendering: optimizeLegibility;
@@ -189,11 +221,34 @@ main {
 
 .content main p,
 .content main li {
-  line-height: 1.72;
+  line-height: 1.78;
 }
 
 .content main p {
-  margin-block: 0.85em;
+  margin-block: 1.05em;
+  text-wrap: pretty;
+}
+
+.content main li {
+  margin-block: 0.45em;
+}
+
+.content main li > p {
+  margin-block: 0.35em;
+}
+
+.content main ul,
+.content main ol {
+  margin-block: 1.05em;
+}
+
+.content main h2 + p,
+.content main h3 + p,
+.content main h2 + ul,
+.content main h3 + ul,
+.content main h2 + ol,
+.content main h3 + ol {
+  margin-top: 0.6em;
 }
 
 .content main h1,
@@ -209,25 +264,35 @@ main {
   margin: 0 0 1.25rem;
   padding-bottom: 1.1rem;
   border-bottom: 1px solid var(--sidebar-spacer);
-  font-size: clamp(38px, 4.1vw, 52px);
+  font-size: clamp(36px, 3.9vw, 48px);
   font-weight: 650;
-  letter-spacing: -0.045em;
-  line-height: 1.04;
+  letter-spacing: -0.04em;
+  line-height: 1.06;
 }
 
-.content main h1::before {
-  display: block;
-  margin-bottom: 0.9rem;
+.opening-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 0.85rem;
   color: var(--state-teal);
-  content: "INFERENCE SYSTEMS  /  EXECUTION NOTES";
   font-family: var(--mono-font);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.14em;
-  line-height: 1.2;
+  letter-spacing: 0.15em;
+  line-height: 1.3;
+  white-space: nowrap;
 }
 
-.content main h1 + p {
+.opening-eyebrow::after {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--state-teal) 45%, transparent), transparent);
+  content: "";
+}
+
+.content main h1 + p,
+.has-opener .opening-eyebrow + h1 + p {
   color: color-mix(in srgb, var(--fg) 88%, var(--bg));
   font-size: 19px;
   line-height: 1.68;
@@ -335,61 +400,57 @@ code {
   font-size: 13px;
 }
 
-.diagram {
-  margin: 1.8rem 0 2.2rem;
-  padding: 20px 18px;
+.diagram-figure {
+  margin: 2rem 0 2.3rem;
+}
+
+.diagram-box {
+  padding: 16px 14px;
   overflow-x: auto;
   border: 1px solid var(--table-border-color);
   border-radius: 10px;
-  background:
-    linear-gradient(var(--trace-faint) 1px, transparent 1px),
-    linear-gradient(90deg, var(--trace-faint) 1px, transparent 1px),
-    var(--surface-raised);
-  background-size: 24px 24px;
-  box-shadow: 0 8px 22px rgba(13, 24, 42, 0.06);
+  background: var(--surface-raised);
+  box-shadow: 0 10px 26px rgba(13, 24, 42, 0.07);
   text-align: center;
 }
 
-.diagram svg {
+.diagram-box svg {
   display: block;
   margin: 0 auto;
   max-width: 100% !important;
   height: auto;
 }
 
-.diagram .node rect,
-.diagram .node polygon,
-.diagram .node circle,
-.diagram .node path {
-  fill: var(--surface-raised) !important;
-  stroke: var(--trace-blue) !important;
+.diagram-box .nodeLabel,
+.diagram-box .edgeLabel,
+.diagram-box text {
+  font-family: var(--utility-font) !important;
+  font-size: 13.5px !important;
+}
+
+.diagram-box .node rect,
+.diagram-box .node polygon,
+.diagram-box .node circle,
+.diagram-box .node path {
   stroke-width: 1.5px !important;
 }
 
-.diagram .nodeLabel,
-.diagram .edgeLabel,
-.diagram text {
-  fill: var(--fg) !important;
-  color: var(--fg) !important;
-  font-family: var(--utility-font) !important;
-  font-size: 14px !important;
+.diagram-figure figcaption {
+  margin-top: 0.7rem;
+  color: color-mix(in srgb, var(--fg) 62%, var(--bg));
+  font-family: var(--utility-font);
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: center;
 }
 
-.diagram .edgePath path,
-.diagram .flowchart-link {
-  stroke: var(--state-teal) !important;
-  stroke-width: 1.8px !important;
-}
-
-.diagram marker path {
-  fill: var(--state-teal) !important;
-  stroke: var(--state-teal) !important;
-}
-
-.diagram .edgeLabel rect,
-.diagram .labelBkg {
-  fill: var(--surface-raised) !important;
-  opacity: 0.94 !important;
+.diagram-figure .fig-label {
+  margin-right: 0.7em;
+  color: var(--state-teal);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .diagram-error {
@@ -398,6 +459,57 @@ code {
   font-size: 13px;
   text-align: left;
   white-space: pre-wrap;
+}
+
+/* Part-divider pages ------------------------------------------------ */
+
+.content main.part-divider {
+  min-height: 58vh;
+  padding-block: 16vh 10vh;
+  text-align: center;
+}
+
+.content main.part-divider h1 {
+  max-width: 15em;
+  margin-inline: auto;
+  padding-bottom: 0;
+  border-bottom: 0;
+  font-size: clamp(40px, 4.6vw, 58px);
+  letter-spacing: -0.04em;
+}
+
+.part-divider h1::after {
+  display: block;
+  width: 64px;
+  height: 3px;
+  margin: 1.6rem auto 0;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--trace-blue) 0 68%, var(--state-teal) 68% 100%);
+  content: "";
+}
+
+.part-divider p:not(.divider-range) {
+  max-width: 36em;
+  margin: 2.4rem auto 0;
+  color: color-mix(in srgb, var(--fg) 78%, var(--bg));
+  font-size: 19.5px;
+  line-height: 1.72;
+  text-wrap: balance;
+}
+
+.part-divider .divider-range {
+  margin-top: 3rem;
+  color: var(--state-teal);
+  font-family: var(--utility-font);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.part-divider .divider-range strong {
+  font-weight: inherit;
+  color: inherit;
 }
 
 .table-wrapper {
@@ -460,6 +572,15 @@ main hr {
     padding-block: 34px 72px;
   }
 
+  .opening-eyebrow {
+    white-space: normal;
+    letter-spacing: 0.11em;
+  }
+
+  .opening-eyebrow::after {
+    display: none;
+  }
+
   .content main h1 {
     font-size: 36px;
   }
@@ -479,9 +600,13 @@ main hr {
     border-radius: 8px;
   }
 
-  .diagram {
+  .diagram-box {
     margin-inline: -8px;
     padding: 14px 10px;
+  }
+
+  .part-divider {
+    padding-block: 9vh 6vh !important;
   }
 }
 
@@ -498,7 +623,7 @@ main hr {
     padding: 0;
   }
 
-  main h1::before {
+  .opening-eyebrow {
     color: #087e78;
   }
 
@@ -506,13 +631,24 @@ main hr {
   main h3,
   main pre,
   main blockquote,
+  .diagram-figure,
   .table-wrapper {
     break-inside: avoid;
+  }
+
+  main p {
+    orphans: 3;
+    widows: 3;
   }
 
   main pre {
     border: 1px solid #536070;
     box-shadow: none;
+  }
+
+  .content main.part-divider {
+    min-height: auto;
+    padding-block: 30vh 0;
   }
 }
 

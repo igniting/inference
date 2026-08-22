@@ -1,3 +1,6 @@
 /book/
 /tmp/
 /.DS_Store
+/.claude/
+/.playwright-mcp/
+/*.png

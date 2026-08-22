@@ -5,6 +5,7 @@
 - [How to Read This Book](how-to-read.md)
 
 # Part I — The Inference Problem
+- [Part I — The Inference Problem](part-1/index.md)
 
 - [1. Serving Intelligence](part-1/01-serving-intelligence.md)
 - [2. Workloads, SLOs, and Goodput](part-1/02-workloads-slos-goodput.md)
@@ -12,6 +13,7 @@
 - [4. Hardware Is a Topology](part-1/04-hardware-topology.md)
 
 # Part II — Inside a Single Engine
+- [Part II — Inside a Single Engine](part-2/index.md)
 
 - [5. Anatomy of an Inference Server](part-2/05-engine-anatomy.md)
 - [6. Scheduling the Decode Loop](part-2/06-scheduling.md)
@@ -22,6 +24,7 @@
 - [11. Speculative and Constrained Decoding](part-2/11-speculation.md)
 
 # Part III — Scaling Across Accelerators
+- [Part III — Scaling Across Accelerators](part-3/index.md)
 
 - [12. Parallelism as Data Movement](part-3/12-parallelism.md)
 - [13. Serving Mixture-of-Experts Models](part-3/13-moe.md)
@@ -30,6 +33,7 @@
 - [16. Routing, Replication, and the Control Plane](part-3/16-routing.md)
 
 # Part IV — Beyond Text-Only Decoding
+- [Part IV — Beyond Text-Only Decoding](part-4/index.md)
 
 - [17. Multimodal and Encoder-Heavy Serving](part-4/17-multimodal.md)
 - [18. Diffusion, Image, Video, and World Models](part-4/18-diffusion-media.md)
@@ -37,6 +41,7 @@
 - [20. Real-Time and Interactive Systems](part-4/20-realtime.md)
 
 # Part V — Production Discipline
+- [Part V — Production Discipline](part-5/index.md)
 
 - [21. APIs as Correctness Boundaries](part-5/21-apis.md)
 - [22. Benchmarking and Performance Science](part-5/22-benchmarking.md)

@@ -127,11 +127,13 @@ the behavior as release-dependent.
 ## Publication tooling
 
 Block diagrams are rendered with
-[Mermaid 11.16.0](https://www.npmjs.com/package/mermaid/v/11.16.0), pinned in the
-book theme. The integration follows Mermaid's official
+[Mermaid 11.16.0](https://www.npmjs.com/package/mermaid/v/11.16.0), vendored
+into the book itself (`assets/vendor/`), so diagrams render offline and are not
+affected by CDN changes. The integration follows Mermaid's official
 [initialization and rendering guidance](https://mermaid.js.org/config/usage.html).
-Diagram definitions remain readable as text if the client-side renderer cannot
-load.
+Body, interface, and code typefaces (Literata, Inter, JetBrains Mono) are also
+vendored as subsets. Diagram definitions remain readable as text if the
+client-side renderer cannot load.
 
 ## Implementation map by chapter
 
