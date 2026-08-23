@@ -1,13 +1,13 @@
 # Research and Originality Policy
 
-This book may be informed by existing books, papers, documentation, source
-code, talks, and experiments, but it must remain an independently conceived and
-written work.
+This book is developed from primary research, official documentation, source
+code, talks, and reproducible experiments. Its explanations, diagrams,
+examples, and exercises are independently conceived and written.
 
 ## Originality rules
 
 1. Do not copy or lightly paraphrase prose, examples, diagrams, exercises, or
-   chapter sequences from the reference book or any other source.
+   chapter sequences from a source.
 2. Develop every explanation from primary evidence and the book's own systems
    model. Cite the evidence that supports factual claims.
 3. Create new diagrams, examples, workloads, experiments, and terminology.

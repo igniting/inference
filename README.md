@@ -3,9 +3,8 @@
 *Engineering Generative AI from Kernel to Cluster*
 
 This repository contains an original, open technical book about modern
-generative-model inference. It studies the ideas embodied in production
-systems—including vLLM and SGLang—without reproducing the structure or prose
-of any existing book.
+generative-model inference. It develops systems principles from primary
+research and production implementations, including vLLM and SGLang.
 
 Read the published book at **[igniting.github.io/inference](https://igniting.github.io/inference/)**.
 The manuscript contains 27 chapters across five parts, plus practical
@@ -42,7 +41,7 @@ Pages.
 - [x] Define the thesis, audience, and boundaries
 - [x] Establish an evidence and originality policy
 - [x] Draft all 27 chapters and nine appendices
-- [x] Compare coverage and pedagogy with the supplied reference book
+- [x] Review coverage and pedagogy across the complete manuscript
 - [x] Revise the complete manuscript after editorial critique
 - [x] Replace open-ended exercises with worked examples and full solutions
 - [x] Add a custom professional mdBook theme

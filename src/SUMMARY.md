@@ -2,8 +2,6 @@
 
 - [Inference Systems](index.md)
 - [Preface](preface.md)
-- [Introduction](introduction.md)
-- [How to Read This Book](how-to-read.md)
 
 # Part I — The Inference Problem
 - [Part I — The Inference Problem](part-1/index.md)
