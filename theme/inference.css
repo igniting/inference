@@ -628,8 +628,29 @@ code {
 }
 
 .book-home .page-pager,
-.book-home-page .nav-chapters {
+.book-home-page .nav-chapters,
+.book-home-page .mobile-nav-chapters {
   display: none;
+}
+
+body.book-home-page #mdbook-content > .nav-wrapper {
+  display: none !important;
+}
+
+body.book-home-page #mdbook-content {
+  padding-bottom: 0;
+}
+
+@media (min-width: 841px) {
+  .content main.book-home {
+    height: calc(100dvh - var(--menu-bar-height) - 1px);
+    min-height: 0;
+  }
+
+  .book-cover {
+    min-height: 0;
+    flex: 0 1 720px;
+  }
 }
 
 /* Part-divider pages ------------------------------------------------ */
