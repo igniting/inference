@@ -1,23 +1,40 @@
 # 0. Your First Inference Request
 
-You have a model and a GPU. What happens when you send it a prompt?
+You have a trained model and enough GPU memory to load it. A GPU is an
+accelerator designed to perform many numerical operations in parallel. What
+happens when you send the model a prompt—the text that asks it to produce a
+response?
 
-Before distributed systems, before scheduling theory, before any abstraction
-layer, there is one request on one device. This chapter follows that request
-from the moment text leaves a user's keyboard to the moment an answer finishes
-streaming back. Every number comes from a concrete model on concrete hardware.
-Every step will reappear, with complications, in later chapters — but here
-it is just a loop, and the loop is short enough to hold in your head.
+Before routing, scheduling theory, or cluster management, there is one request
+and one model **replica**—an independently serving copy of the model. This
+chapter follows that request from the moment text leaves a user's keyboard to
+the moment an answer finishes streaming back. The replica may span several
+GPUs, but we treat it as one logical worker and postpone communication between
+devices. Every step will reappear, with complications, in later chapters—but
+here it is one loop, short enough to hold in your head.
 
 ## The model on the wire
 
-Assume the model used throughout this book's exercises: a dense decoder with
-approximately 70 billion parameters, stored in BF16 (two bytes per parameter).
-It has 80 transformer layers, 8 key-value heads per layer, and a head dimension
-of 128. This is the "Atlas" model collected in the reference card later in this
-chapter and used in every worked example.
+Assume the fictional model used throughout this book's exercises: "Atlas," a
+dense, decoder-only Transformer with approximately 70 billion **parameters**.
+A parameter is one learned number in the model. *Dense* means every generated
+token uses the same set of parameters; *decoder-only* means the model produces
+a continuation one token at a time.
 
-**One request through one GPU: the complete path.**
+Atlas stores each parameter in **BF16**, short for *Brain Floating Point 16*.
+BF16 is a 16-bit number format commonly used for neural-network weights; each
+value occupies two bytes instead of the four bytes used by 32-bit floating
+point. Chapter 10 explains the accuracy and performance trade-offs of reduced
+precision. For now, its important property is simply its size.
+
+The model has 80 **Transformer layers**—repeated processing blocks containing
+attention and feed-forward calculations, the latter being learned matrix
+transformations applied to each token position. We will introduce the shape of
+its attention state only when we calculate the request's memory use later in
+the chapter. The Atlas constants are collected in the reference card near the
+end.
+
+**One request through one model worker: the complete path.**
 
 ```blockdiag
 flowchart LR
@@ -31,11 +48,12 @@ flowchart LR
     F --> D
 ```
 
-The arrow from sampling back into the KV cache is the defining feature of
-autoregressive generation: each new token becomes input for the next step. The
-loop runs until a stop condition fires. Everything before prefill is string
-manipulation; everything after sampling is string manipulation. The GPU work
-lives in the middle, and that middle is where time goes.
+The arrow from sampling back into the KV cache represents **autoregressive
+generation**: the model generates one token, appends it to the sequence, and
+uses the entire sequence to choose the next token. The loop runs until a stop
+condition fires. Everything before prefill is string manipulation; everything
+after sampling is string manipulation. The GPU work lives in the middle, and
+that middle is where time goes.
 
 
 The weight footprint is direct arithmetic:
@@ -44,20 +62,22 @@ The weight footprint is direct arithmetic:
 70 billion parameters × 2 bytes = 140 GB
 ```
 
-That 140 GB must sit in GPU memory before the model can answer anything. On a
-single 80 GB accelerator, the weights do not fit; on a pair they do, but with
-little room to spare. For now, assume the model is loaded and ready. Chapter 4
-addresses the topology question — how many devices, connected how — and
-Chapter 13 addresses the parallelism question — how to split the work across
+That 140 GB must sit in GPU memory before the model can answer anything. It
+does not fit on a single 80 GB GPU, so a practical replica divides the weights
+across multiple devices. For now, assume that replica is loaded and ready and
+follow the request as if the devices formed one worker. Chapter 4 explains how
+the devices are connected; Chapter 13 explains how the model is divided among
 them.
 
 ## Text to tokens
 
 A model does not read text. It reads integers.
 
-A tokenizer splits a string into subword pieces and maps each piece to an
-integer ID from a fixed vocabulary. The mapping is deterministic for a given
-tokenizer version: the same string always produces the same IDs.
+A **tokenizer** converts text into the integers a model accepts. It usually
+splits a string into **subwords**: pieces that may be a whole common word, part
+of a rare word, punctuation, or whitespace. Each piece maps to an integer ID
+from a fixed vocabulary. The mapping is deterministic for a given tokenizer
+version: the same string always produces the same IDs.
 
 ```text
 "The quick brown fox" → [464, 4996, 8516, 3143]
@@ -69,37 +89,39 @@ are split into several tokens; common words are single tokens. The cost of
 tokenization is measured in microseconds per token — negligible next to what
 comes after.
 
-A chat template may wrap the user's text with role markers, system instructions,
-and formatting tokens before the tokenizer runs. The result is a sequence of
-integer IDs, typically hundreds to tens of thousands of them, ready for the
-model.
+A **chat template** is a formatting rule that places role markers, system
+instructions, and separators around a conversation before tokenization. The
+result is a sequence of integer IDs, typically hundreds to tens of thousands
+of them, ready for the model.
 
 ## What the model is, physically
 
-The model is a stack of transformer layers. Each layer contains weight
-matrices — large two-dimensional arrays of numbers — that define learned linear
-transformations, plus normalization parameters and biases. The 80 layers are
-applied in sequence: the output of layer 0 feeds into layer 1, layer 1 into
-layer 2, and so on through layer 79. Before the first layer sits an embedding
-table that converts token IDs to vectors. After the last layer sits a
-projection that converts vectors back to vocabulary-sized scores.
+The model is a stack of Transformer layers. Its parameters are also called
+**weights**. Most sit in matrices—large two-dimensional arrays of numbers—that
+transform one array of numbers into another. The 80 layers are applied in
+sequence: the output of layer 0 feeds into layer 1, layer 1 into layer 2, and
+so on through layer 79.
 
-All of these weights sit in GPU memory, occupying the 140 GB computed above.
-They do not change during inference. The model reads them, repeatedly, every
-time it processes a token.
+Before the first layer, an **embedding table** converts each token ID into a
+vector, a fixed-length array of numbers the model can process. After the last
+layer, an output projection converts the final vector into one score for every
+token in the vocabulary.
+
+All of these weights sit across the replica's GPU memory, occupying the 140 GB
+computed above. They do not change during inference. The model reads them,
+repeatedly, every time it processes a token.
 
 ## Prefill: processing the prompt
 
-The first phase of inference is **prefill**. All input tokens are processed
-together, in parallel, through every layer of the model. This is a large matrix
-computation: the model reads its weights once and applies them to all input
-positions simultaneously.
+The first phase of inference is **prefill**: processing the entire input before
+generating any output. All input tokens pass through every layer together. This
+is a large matrix computation in which the model can apply one weight read to
+many token positions.
 
 For a 1,000-token prompt, prefill performs roughly 1,000 positions' worth of
-arithmetic while reading the 140 GB of weights once. The arithmetic intensity
-is high — many operations per byte of weight data moved — so the GPU's compute
-units stay busy. Prefill resembles a small training step in its computational
-profile.
+arithmetic while reading the 140 GB of weights once. Its **arithmetic
+intensity**—the amount of calculation performed per byte moved from memory—is
+high, so the GPU's compute units stay busy.
 
 Using the service-time model that recurs throughout this book:
 
@@ -107,9 +129,10 @@ Using the service-time model that recurs throughout this book:
 prefill_ms(tokens) = 20 + 0.035 × tokens
 ```
 
-The 20 ms is a fixed overhead — kernel launches, memory allocation, initial
-data movement. The 0.035 ms per token is the incremental cost once the pipeline
-is running. For a 1,000-token prompt:
+The 20 ms is fixed overhead: launching **kernels** (small GPU programs),
+allocating working memory, and performing initial data movement. The 0.035 ms
+per token is the incremental cost once the pipeline is running. For a
+1,000-token prompt:
 
 ```text
 prefill_ms(1000) = 20 + 0.035 × 1000 = 20 + 35 = 55 ms
@@ -123,13 +146,20 @@ delay the user perceives before the answer starts streaming.
 
 Prefill does not just produce output. It creates persistent state.
 
-Inside each transformer layer, the attention mechanism computes **keys** and
-**values** for every input position. These key-value pairs encode what the
-model has learned about the relationships between tokens in the prompt. They
-must be kept in GPU memory because every future decode step will read them.
+Inside each Transformer layer, the **attention** operation lets a token retrieve
+relevant information from earlier tokens. The current token produces a
+**query** vector. Every earlier position has a **key** vector used to measure a
+match with that query and a **value** vector containing the information to
+retrieve. Several attention heads perform this matching in parallel from
+different learned perspectives.
 
-This persistent state is the **KV cache**. Its size per token, across all
-layers, is:
+The keys and values must remain in GPU memory because every future decode step
+will read them. Keeping them avoids recomputing the entire prompt for every new
+token.
+
+This persistent state is the **KV cache** (*key-value cache*). Atlas stores
+eight key-value heads per layer, and each key or value contains 128 BF16
+numbers. Its size per token across all layers is therefore:
 
 ```text
 2 (keys and values) × 80 layers × 8 KV heads × 128 dimensions × 2 bytes
@@ -143,15 +173,17 @@ For the 1,000-token prompt, the total KV cache created during prefill is:
 1,000 tokens × 320 KiB = 320,000 KiB ≈ 312 MiB
 ```
 
-Three hundred and twelve megabytes of state, created in 55 milliseconds,
+Here `GB` means a decimal billion bytes. KiB, MiB, and GiB are binary memory
+units: each is 1,024 of the preceding unit. Three hundred and twelve MiB of
+state, created in 55 milliseconds,
 that must remain resident in GPU memory for the entire duration of the
 request. This state will grow by 320 KiB with every new token the model
 generates.
 
 ## Decode: generating the answer
 
-After prefill, the model enters the **decode** phase. It generates one new
-token at a time. Each decode step:
+After prefill, the model enters the **decode** phase: the repeated loop that
+generates one new token at a time. Each decode step:
 
 1. Reads the model weights (140 GB).
 2. Reads all accumulated KV cache entries.
@@ -159,33 +191,35 @@ token at a time. Each decode step:
 4. Writes one new KV entry per layer.
 5. Produces a vector of logits — one score per vocabulary entry.
 
-The critical difference from prefill: the model reads 140 GB of weights to
-perform arithmetic for a single new position. The ratio of data moved to
-useful computation is poor. Decode is **memory-bandwidth-bound**: the GPU's
-arithmetic units are mostly idle, waiting for data to arrive from memory.
+The critical difference from prefill is that the model now reads 140 GB of
+weights to compute only one new position per active request. The ratio of data
+moved to useful computation is poor. Decode is **memory-bandwidth-bound**: its
+speed is limited by **memory bandwidth**, the number of bytes the GPU can move
+per second, rather than by how quickly it can perform arithmetic.
 
-Each decode step takes approximately 45 ms at moderate batch size using the
-Atlas cost model. Most of that time is spent streaming weights from GPU memory
-through the compute units.
+Each decode step takes approximately 45 ms for a small group of simultaneous
+requests in the Atlas cost model. Most of that time is spent streaming weights
+from GPU memory through the compute units.
 
 ### Sampling: from scores to a token
 
-The logits produced by the final layer are a vector of raw scores, one per
-vocabulary entry. To select the next token:
+The **logits** produced by the final layer are raw scores, one per vocabulary
+entry. They are not probabilities yet. To select the next token:
 
-1. Apply temperature scaling (divide logits by a temperature value, sharpening
-   or flattening the distribution).
-2. Convert to probabilities via softmax.
-3. Apply any filters — top-k keeps only the k highest-probability tokens,
-   top-p keeps the smallest set whose cumulative probability exceeds a
-   threshold.
-4. Sample from the filtered distribution, or take the argmax for greedy
-   decoding.
+1. **Temperature** rescales the logits. Lower values make high-scoring tokens
+   more dominant; higher values make alternatives more likely.
+2. **Softmax** converts the scores into probabilities that sum to one.
+3. Optional filters reduce the choices: **top-k** keeps the `k` most probable
+   tokens, while **top-p** keeps the smallest set whose cumulative probability
+   reaches a chosen threshold.
+4. The server samples from the remaining probabilities. **Greedy decoding**
+   instead always chooses the highest-scoring token.
 
-The result is one integer: the ID of the next token. This step is
-computationally trivial — microseconds — but it carries state. The random
-number generator's position is part of the request and must be preserved
-across steps for reproducibility.
+The result is one integer: the ID of the next token. This step is small compared
+with running the model, but it carries state. Sampling uses a pseudo-random
+number generator: a deterministic sequence controlled by a seed and its
+current position. Preserving that state is necessary when a system promises
+repeatable output.
 
 ### Detokenization: back to text
 
@@ -236,7 +270,9 @@ flowchart TB
     G --> J
 ```
 
-A summary of where memory goes during this single request:
+**Activations** are the temporary intermediate vectors produced while executing
+a layer. They can be reused after the step. Logits are the raw vocabulary
+scores just introduced. A summary of where memory goes during this request:
 
 | Object | Size | Lifetime |
 | --- | --- | --- |
@@ -259,9 +295,10 @@ increases.
 
 ### Ten concurrent requests
 
-Ten users send prompts at approximately the same time, each with a 1,000-token
-input. The model weights are still 140 GB — they are read, not copied, so ten
-requests do not need ten copies. But the KV cache is per-request:
+Ten users send prompts at approximately the same time, so ten requests are
+**concurrent**—in progress together. Each has a 1,000-token input. The model
+weights are still 140 GB: they are read, not copied, so ten requests do not
+need ten copies. But the KV cache is per-request:
 
 ```text
 10 requests × 312 MiB = 3.12 GiB after prefill
@@ -273,15 +310,14 @@ After each request generates 200 tokens of output:
 10 × 375 MiB ≈ 3.66 GiB of KV state
 ```
 
-Still manageable on an 80 GB device. But a benefit appears: **batching**.
-When the engine runs a decode step, it reads the 140 GB of weights once and
-applies them to all ten sequences simultaneously. The same memory traffic
-that served one request now serves ten. Each step takes longer — more KV cache
-to read, more arithmetic — but the time grows sublinearly in the number of
-requests. Ten requests do not take ten times as long per step.
+Still manageable on an 80 GB device. But a benefit appears: **batching**, or
+processing a group of requests in one model step. The engine reads the 140 GB
+of weights once and applies them to all ten sequences. The same weight traffic
+that served one request now serves ten. Each step takes longer—there is more KV
+state to read and more arithmetic to perform—but not ten times longer.
 
-This is the fundamental efficiency gain of batched inference: weight reads are
-amortized across sequences.
+This is the fundamental efficiency gain of batched inference: the cost of
+reading the weights is shared across sequences.
 
 ### One hundred concurrent requests
 
@@ -291,9 +327,9 @@ Push further. One hundred concurrent requests with 1,000-token prompts:
 100 × 312 MiB = 30.5 GiB after prefill
 ```
 
-On an 80 GB device holding 140 GB of weights across multiple accelerators (or
-a quantized model on one), 30 GiB of KV state is a significant fraction of
-remaining memory. After each generates 200 output tokens:
+On an 80 GB device holding part of the 140 GB model—or holding a compressed
+version that uses fewer bits per weight—30 GiB of KV state is a significant
+fraction of the remaining memory. After each request generates 200 tokens:
 
 ```text
 100 × 375 MiB = 36.6 GiB
@@ -305,37 +341,23 @@ the entire device. The model cannot even hold them all in memory simultaneously.
 
 ### The tension
 
-More requests sharing a decode step means better utilization of the GPU's
-arithmetic units — the weight read pays for more work. But more requests also
-means more KV cache memory. The engine faces a direct trade-off:
+More requests sharing a decode step means better **utilization**—a larger
+fraction of the GPU is doing useful work. But more requests also means more KV
+cache memory. The engine faces a direct trade-off:
 
 - **Admit more requests**: better throughput, higher GPU utilization, but more
-  memory pressure. Eventually something must be evicted or preempted.
+  memory pressure. Eventually the engine must evict cached state or preempt a
+  request—pause it and free some of its memory.
 - **Admit fewer requests**: lower utilization, wasted bandwidth on weight
   reads that serve too few sequences, but comfortable memory.
 
-This tension — throughput against memory, utilization against latency — is the
-reason the rest of this book exists. Every mechanism in every chapter is, at
-bottom, a strategy for managing this exchange:
-
-| Chapter | What it manages |
-| --- | --- |
-| 6. Scheduling | which requests share each step, and how many |
-| 7. Local model state | how memory is allocated, paged, and reclaimed |
-| 8. Kernels | how to make the weight read and attention faster |
-| 9. Compilation | how to avoid repeating launch and specialization work |
-| 10. Quantization | how to make weights and cache smaller |
-| 11. Speculation | how to get more tokens per step |
-| 12. Adapters | how customized weights share a base model |
-| 13. Parallelism | how to spread work across devices |
-| 14. MoE | how to place and balance conditional experts |
-| 15. Disaggregation | how to separate encoder, prefill, and decode |
-| 16. Distributed caching | how reusable state outlives one worker |
-| 17. Routing | how to choose which replica serves a request |
-
-Each entry in this table addresses a consequence of the single fact that
-serving more concurrent requests is both necessary for efficiency and
-expensive in state.
+This tension—**throughput** (total work completed per second) against memory,
+and utilization against **latency** (the time one request waits)—is the reason
+the rest of this book exists. Later chapters ask how many requests may run
+together, how their growing state should be stored, how work should be divided
+across devices, and how the service should behave when demand exceeds capacity.
+All are consequences of one fact: sharing the model makes inference more
+efficient, while every additional request brings state and delay.
 
 ## The numbers, collected
 
@@ -374,7 +396,8 @@ pip install vllm
 vllm serve meta-llama/Llama-3.1-8B-Instruct --dtype auto
 ```
 
-The `--dtype auto` flag lets vLLM choose the best precision for your hardware.
+The `--dtype auto` flag lets vLLM choose a numeric format, such as BF16, that
+the model and hardware support.
 The server loads the model weights into GPU memory and begins listening for
 requests on port 8000.
 
@@ -395,28 +418,28 @@ curl -s http://localhost:8000/v1/chat/completions \
   }' | head -20
 ```
 
-With `"stream": true`, you will see server-sent events arrive one at a time,
-each carrying a token or a small group of tokens. The gap before the first
-event is TTFT — prefill plus any queue wait. The rhythm of subsequent events
-is the decode cadence.
+With `"stream": true`, you will see server-sent events—small messages sent over
+one long-lived HTTP response—arrive one at a time. Each carries a token or a
+small group of tokens. The gap before the first event is TTFT: prefill plus any
+queue wait. The rhythm of subsequent events is the decode cadence.
 
 ### What to observe
 
 While the request runs, a few measurements connect to this chapter's content:
 
-1. **GPU memory usage.** Run `nvidia-smi` in a third terminal. Note the memory
-   consumed after model loading (weights plus runtime overhead) and watch
-   whether it changes during generation (KV cache allocation).
+1. **GPU memory usage.** Run `nvidia-smi`, NVIDIA's command-line GPU status
+   tool, in a third terminal. Note the memory consumed after model loading
+   (weights plus runtime overhead) and watch whether it changes during
+   generation (KV cache allocation).
 
 2. **Time to first token.** The delay before the first streamed event includes
-   tokenization, prefill, and one decode step. For a short prompt on an
-   8B model, expect single-digit to low tens of milliseconds.
+   tokenization, queueing, prefill, and one decode step. Compare a short prompt
+   with a longer one while keeping every other setting fixed.
 
-3. **Token generation speed.** Count the streamed events per second. This is
-   the inverse of the per-step decode time. On a well-matched GPU, an 8B
-   model in BF16 might produce 30 to 80 tokens per second for a single
-   request — much faster than the 70B model's ~22 tokens per second, because
-   the smaller model reads far fewer weight bytes per step.
+3. **Token generation speed.** Count the streamed events per second. Compare
+   this measured rate with the time of one decode step. Do not expect the Atlas
+   estimates to match: this model is smaller and your hardware and software
+   revisions determine the actual result.
 
 4. **Concurrent requests.** Open several terminals and send requests
    simultaneously. Watch GPU memory climb (more KV cache) and per-request
@@ -428,12 +451,34 @@ faster, and it fits on one device. But the structure is identical: tokenize,
 prefill, decode loop, sample, detokenize, stream. Everything observed here
 scales, with the same tensions, to the 70B model and beyond.
 
+## Further reading
+
+You do not need these resources to continue to Chapter 1. Use them when one of
+the chapter's new concepts deserves a slower or more visual second explanation.
+
+- **Text and tokens:** Hugging Face's [tokenizer introduction](https://huggingface.co/docs/course/en/chapter2/4)
+  explains why models consume token IDs and how word and subword tokenization
+  differ.
+- **Transformers and attention:** Google's [illustrated Transformer
+  introduction](https://research.google/blog/transformer-a-novel-neural-network-architecture-for-language-understanding/)
+  develops embeddings, attention, and decoder generation visually.
+- **BF16 and reduced precision:** NVIDIA's [TensorRT developer
+  guide](https://docs.nvidia.com/deeplearning/tensorrt/archives/tensorrt-1060/pdf/TensorRT-Developer-Guide.pdf)
+  describes FP32, FP16, and BF16 and the trade-off between numerical range,
+  precision, memory, and speed.
+- **Compute-bound versus memory-bound work:** NVIDIA's [roofline profiling
+  guide](https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html#roofline-charts)
+  connects arithmetic intensity, memory bandwidth, and peak computation.
+- **Why KV-cache layout matters:** the vLLM [PagedAttention
+  paper](https://doi.org/10.1145/3600006.3613165) shows how request state and
+  memory fragmentation limit batching in a production inference engine.
+
 ## What comes next
 
-This chapter traced one request through one GPU: text to tokens, tokens through
-a stack of transformer layers, persistent state created during prefill, a
-bandwidth-bound decode loop, sampling, and text back out. The numbers were
-specific, the path was linear, and the model had a GPU to itself.
+This chapter traced one request through one model replica: text to tokens,
+tokens through a stack of Transformer layers, persistent state created during
+prefill, a bandwidth-bound decode loop, sampling, and text back out. The path
+was linear, and the request did not yet compete with other users.
 
 The rest of this book is about what happens when this simple loop must serve
 thousands of users simultaneously, across many GPUs, under strict latency and

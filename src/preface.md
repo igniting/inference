@@ -103,12 +103,13 @@ change. The book therefore organizes the implementation details around more
 durable ideas: scheduling, state ownership, data movement, service contracts,
 and evidence.
 
-Chapter 0 begins with one request on one GPU. From there, the book opens the
-engine, crosses accelerator and machine boundaries, and finally confronts the
-operational and economic decisions of a production service. New readers should
-start with Chapter 0 and continue in order. Experienced practitioners can use
-the table of contents to enter at the problem they are solving and consult the
-appendices only when they need a worksheet, reference, or debugging procedure.
+Chapter 0 begins with one request on one model worker. From there, the book
+opens the engine, crosses accelerator and machine boundaries, and finally
+confronts the operational and economic decisions of a production service. New
+readers should start with Chapter 0 and continue in order. Experienced
+practitioners can use the table of contents to enter at the problem they are
+solving and consult the appendices only when they need a worksheet, reference,
+or debugging procedure.
 
 By the end, you should be able to take an unfamiliar inference system, draw its
 critical path, locate the state and queues that govern it, predict where it will
