@@ -159,7 +159,7 @@
 
     nodes.forEach(function (node) {
       var text = node.nodeValue;
-      var pattern = /\bChapter (\d{1,2})\b|\bAppendix ([A-G])\b/g;
+      var pattern = /\bChapter (\d{1,2})\b|\bAppendix ([A-Z])\b/g;
       var match;
       var frag = document.createDocumentFragment();
       var last = 0;
@@ -191,6 +191,17 @@
       if (/^(\.\.\/)*(part-\d+\/)?index\.html$/.test(href.split("#")[0]) ||
           /part-\d+\/index\.html$/.test(href)) {
         a.classList.add("divider-link");
+      }
+    });
+
+    /* Keep section labels that do not have a clickable divider of their own. */
+    var dividerLabels = [];
+    document.querySelectorAll(".sidebar a.divider-link").forEach(function (a) {
+      dividerLabels.push(a.textContent.trim());
+    });
+    document.querySelectorAll(".sidebar .part-title").forEach(function (title) {
+      if (dividerLabels.indexOf(title.textContent.trim()) === -1) {
+        title.classList.add("standalone-divider");
       }
     });
   }
