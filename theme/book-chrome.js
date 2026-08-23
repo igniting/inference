@@ -58,6 +58,15 @@
     var partMatch = title.match(/^Part\s+([IVX]+)\b(.*)$/i);
     var hasBodySections = !!main.querySelector("h2");
 
+    var hasBookCover = !!main.querySelector(".book-cover");
+    var isPrintEdition = /(?:^|\/)print\.html$/.test(window.location.pathname);
+    if (hasBookCover && !isPrintEdition) {
+      main.classList.add("book-home");
+      document.body.classList.add("book-home-page");
+      return;
+    }
+    if (hasBookCover && isPrintEdition) return;
+
     if (chapterMatch) {
       main.dataset.chapterNumber = chapterMatch[1];
       main.dataset.chapterTitle = chapterMatch[2];

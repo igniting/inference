@@ -520,6 +520,101 @@ code {
   white-space: pre-wrap;
 }
 
+/* Book cover -------------------------------------------------------- */
+
+.content main.book-home {
+  --content-max-width: 1080px;
+  display: flex;
+  box-sizing: border-box;
+  min-height: calc(100vh - var(--menu-bar-height));
+  max-width: var(--content-max-width);
+  padding-block: 42px 54px;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.book-cover {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: clamp(580px, 72vh, 720px);
+  overflow: hidden;
+}
+
+.book-cover::before {
+  position: absolute;
+  z-index: -2;
+  top: 50%;
+  right: -28px;
+  width: min(72%, 760px);
+  aspect-ratio: 18 / 19;
+  background: url("../assets/cover-system-map.svg") center / contain no-repeat;
+  content: "";
+  opacity: 0.58;
+  transform: translateY(-50%);
+}
+
+.book-cover::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    var(--bg) 0%,
+    color-mix(in srgb, var(--bg) 98%, transparent) 36%,
+    color-mix(in srgb, var(--bg) 82%, transparent) 57%,
+    transparent 78%
+  );
+  content: "";
+}
+
+.cover-copy {
+  position: relative;
+  z-index: 1;
+  max-width: 500px;
+  padding-left: 10px;
+}
+
+.content main .book-cover h1 {
+  margin: 0 0 24px;
+  padding: 0;
+  border: 0;
+  font-size: clamp(58px, 6.4vw, 84px);
+  letter-spacing: -0.055em;
+  line-height: 0.9;
+}
+
+.book-cover h1 span {
+  display: block;
+}
+
+.content main .book-cover .cover-subtitle {
+  margin: 0 0 19px;
+  color: var(--fg);
+  font-family: var(--utility-font);
+  font-size: clamp(21px, 2.2vw, 28px);
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1.18;
+}
+
+.content main .book-cover .cover-author {
+  margin: 34px 0 0;
+  color: var(--signal-deep);
+  font-family: var(--utility-font);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0.035em;
+  line-height: 1.4;
+}
+
+.book-home .page-pager,
+.book-home-page .nav-chapters {
+  display: none;
+}
+
 /* Part-divider pages ------------------------------------------------ */
 
 .content main.part-divider {
@@ -768,6 +863,36 @@ main a.xref {
   font-family: var(--utility-font);
 }
 
+@media (max-width: 840px) {
+  .content main.book-home {
+    --content-max-width: 680px;
+    justify-content: flex-start;
+  }
+
+  .book-cover {
+    min-height: 680px;
+  }
+
+  .cover-copy {
+    padding-inline: 6px;
+  }
+
+  .book-cover::before {
+    right: -120px;
+    width: min(94%, 650px);
+    opacity: 0.34;
+  }
+
+  .book-cover::after {
+    background: linear-gradient(
+      90deg,
+      var(--bg) 0%,
+      color-mix(in srgb, var(--bg) 96%, transparent) 55%,
+      color-mix(in srgb, var(--bg) 45%, transparent) 100%
+    );
+  }
+}
+
 @media (min-width: 1100px) {
   .diagram-figure,
   .table-wrapper {
@@ -782,6 +907,40 @@ main a.xref {
 
   .content main {
     padding-block: var(--space-5) 64px;
+  }
+
+  .content main.book-home {
+    padding-block: 28px 48px;
+  }
+
+  .book-cover {
+    min-height: calc(100vh - var(--menu-bar-height) - 76px);
+  }
+
+  .book-cover::before {
+    right: -230px;
+    width: 640px;
+    max-width: none;
+    opacity: 0.25;
+  }
+
+  .book-cover::after {
+    background: linear-gradient(
+      90deg,
+      var(--bg) 0%,
+      color-mix(in srgb, var(--bg) 95%, transparent) 64%,
+      color-mix(in srgb, var(--bg) 52%, transparent) 100%
+    );
+  }
+
+  .content main .book-cover h1 {
+    margin-bottom: 20px;
+    font-size: 58px;
+  }
+
+  .content main .book-cover .cover-subtitle {
+    margin-bottom: 16px;
+    font-size: 22px;
   }
 
   .content main p,
