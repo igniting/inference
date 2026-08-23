@@ -1,4 +1,4 @@
-# 19. Inference for Reinforcement Learning
+# 20. Inference for Reinforcement Learning
 
 In online reinforcement learning for language models, inference does not serve
 an end user. It generates experience for a trainer.
@@ -20,7 +20,15 @@ immutable for the duration of the service. Caches derived from them, graphs
 compiled for them, and KV state produced by them all acquire version
 dependencies that a text service never had to express.
 
-## Visual map
+## Rollouts arrive in groups and waves
+
+Training algorithms often request several completions for the same prompt.
+Their shared prefix creates a strong cache opportunity — and it is the one
+kind of reuse this book has described that arrives *pre-packaged*: a group of
+8 samples shares the entire prompt prefill, so the first sample's prefill pays
+once and seven more ride the cached prefix. Chapter 16's prefix machinery does
+the rest. Output lengths can be highly variable, especially for reasoning
+tasks. A group may not be ready for training until enough valid samples finish.
 
 **Online reinforcement learning couples serving and training through versions.**
 
@@ -34,34 +42,6 @@ flowchart LR
     U --> I
 ```
 
-**A multi-rank update prepares everywhere before it commits anywhere.**
-
-```blockdiag
-flowchart LR
-    S["Stage new weights"] --> V["Validate shapes and checksums"]
-    V --> A{"All ranks prepared?"}
-    A -->|No| R["Retain old active version"]
-    A -->|Yes| C["Commit new generation"]
-    C --> I["Invalidate dependent state"]
-    I --> H["Health forward pass and reopen"]
-```
-
-| Coupled resource | Inference symptom | Training consequence | Control |
-| --- | --- | --- | --- |
-| accelerator memory | KV competes with optimizer or weights | smaller training batch | sleep and explicit ownership |
-| policy version | mixed or stale rollouts | biased update | version on every artifact |
-| rollout queue | unbounded generation | policy lag | lag and byte admission limits |
-| numerical path | log-probability mismatch | unstable ratios | reproducible token metadata |
-
-## Rollouts arrive in groups and waves
-
-Training algorithms often request several completions for the same prompt.
-Their shared prefix creates a strong cache opportunity — and it is the one
-kind of reuse this book has described that arrives *pre-packaged*: a group of
-8 samples shares the entire prompt prefill, so the first sample's prefill pays
-once and seven more ride the cached prefix. Chapter 15's prefix machinery does
-the rest. Output lengths can be highly variable, especially for reasoning
-tasks. A group may not be ready for training until enough valid samples finish.
 
 Rollout traffic also has a failure-domain property worth exploiting: a lost
 trajectory loses only its own compute, never a user's request. That makes
@@ -198,11 +178,11 @@ and it is worth reading as memory *coordination* rather than an allocator trick:
 SGLang exposes comparable sleep, wake, and weight-update controls through its
 engine and scheduler paths. The design point to carry forward is that sleep
 levels are an API surface between two systems with different memory owners:
-the trainer negotiates for capacity the way Chapter 12's scheduler negotiates
+the trainer negotiates for capacity the way Chapter 6's scheduler negotiates
 for KV blocks — explicit acquire, verified release, tagged restore.
 
 The level choice itself prices cleanly with the handoff-timeline numbers.
-Level 1 wakes by reloading weights from storage — inside Chapter 16's declared
+Level 1 wakes by reloading weights from storage — inside Chapter 17's declared
 multi-minute cold-start envelope. Level 2 pays the ~3 s host snapshot up front
 and wakes by copying the same 140 GB back over the host link — seconds, not
 minutes. For an RL loop that sleeps and wakes every round, level 2's snapshot
@@ -213,6 +193,26 @@ with the very trainer it is making room for.
 ## Weight update is a versioned transaction
 
 A safe update has a beginning, a data phase, and a commit point.
+
+**A multi-rank update prepares everywhere before it commits anywhere.**
+
+```blockdiag
+flowchart LR
+    S["Stage new weights"] --> V["Validate shapes and checksums"]
+    V --> A{"All ranks prepared?"}
+    A -->|No| R["Retain old active version"]
+    A -->|Yes| C["Commit new generation"]
+    C --> I["Invalidate dependent state"]
+    I --> H["Health forward pass and reopen"]
+```
+
+| Coupled resource | Inference symptom | Training consequence | Control |
+| --- | --- | --- | --- |
+| accelerator memory | KV competes with optimizer or weights | smaller training batch | sleep and explicit ownership |
+| policy version | mixed or stale rollouts | biased update | version on every artifact |
+| rollout queue | unbounded generation | policy lag | lag and byte admission limits |
+| numerical path | log-probability mismatch | unstable ratios | reproducible token metadata |
+
 
 1. Stop admitting model steps that would overlap the change.
 2. Establish the transfer group and expected parameter metadata.
@@ -346,7 +346,7 @@ is what makes mismatches diagnosable later rather than mysterious forever.
 Test long responses (where accumulated drift shows), padding boundaries
 (where masks decide whether pad positions contaminate sums), structured
 outputs (where grammar-constrained tokens may take different code paths), and
-MoE routing — Chapter 13's expert-choice instability is a numerical-agreement
+MoE routing — Chapter 14's expert-choice instability is a numerical-agreement
 hazard here too, since a different dispatch order changes the computed
 logprob of the same tokens.
 
@@ -397,8 +397,8 @@ trajectory, cache entry, graph, and message.
 
 Fail rank 3 during transfer and show why no mixed group resumes. Then delay the
 trainer and define queue-byte and policy-lag admission bounds. Compare with
-[Appendix G](../appendices/g-worked-solutions.md#19-policy-update-transaction).
+[Appendix G](../appendices/g-worked-solutions.md#20-policy-update-transaction).
 
 Inference inside training is still a serving system, but the customer is an
-algorithm with stronger version and reproducibility requirements. Chapter 20
+algorithm with stronger version and reproducibility requirements. Chapter 21
 examines another long-lived customer: the interactive session.

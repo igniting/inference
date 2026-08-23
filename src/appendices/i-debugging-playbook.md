@@ -1,9 +1,9 @@
-# 22b. Debugging Inference in Practice
+# Appendix I. Production Debugging Playbook
 
-Chapter 22 teaches you to design experiments that produce trustworthy numbers.
-Chapter 23 teaches you to build the observability that makes incidents
-diagnosable. This chapter sits between them: it walks three real debugging
-sessions end-to-end, each starting from a symptom an operator would see in
+Chapter 23 teaches you to design experiments that produce trustworthy numbers,
+and Chapter 24 builds the observability that makes incidents diagnosable. This
+playbook applies both: it walks three real debugging sessions end-to-end, each
+starting from a symptom an operator would see in
 production and ending at a verified fix. The goal is not to catalogue every
 possible failure but to demonstrate the *method* -- split the symptom into
 candidate causes, use evidence to eliminate branches, and verify the fix
@@ -14,41 +14,6 @@ TP4 deployment (35 GB per rank), 320 KiB of KV state per token, 0.035 ms per
 prefill token, 45 ms decode step, 600 ms TTFT target, 150 ms ITL ceiling.
 Commands and metrics reference vLLM and SGLang at their pinned SHAs; the
 investigation method transfers to any engine.
-
-## Visual map
-
-**A debugging session is a directed search, not a tour of dashboards.**
-
-```blockdiag
-flowchart LR
-    S["Symptom"] --> H["Hypotheses ranked by likelihood"]
-    H --> E["Evidence: metric, trace, or profile"]
-    E --> D{"Hypothesis confirmed?"}
-    D -->|Yes| F["Fix and verify"]
-    D -->|No| H
-    F --> V["Regression gate"]
-```
-
-**Each walkthrough follows the same five-step discipline.**
-
-```blockdiag
-flowchart TB
-    subgraph Method
-        direction TB
-        S1["1. Observe the symptom precisely"]
-        S2["2. List candidate causes"]
-        S3["3. Split with targeted evidence"]
-        S4["4. Identify the root cause"]
-        S5["5. Fix, verify, add the signal"]
-    end
-    S1 --> S2 --> S3 --> S4 --> S5
-```
-
-| Walkthrough | Symptom | Misleading signal | Actual cause |
-| --- | --- | --- | --- |
-| High TTFT | p95 TTFT jumps from 480 ms to 1,400 ms | GPU utilization drops, suggesting underload | KV cache pressure triggers preemption and re-prefill |
-| OOM restarts | Workers restart with OOM, no request pattern | Memory looks stable between crashes | CUDA graph pool grows for unseen shapes |
-| ITL spikes | p99 ITL hits 300+ ms, median stays 48 ms | Decode kernel looks slow | Long prefill chunks in mixed batches extend step time |
 
 ## Walkthrough 1: high TTFT under load
 
@@ -701,6 +666,24 @@ cause, and verify the fix against the original measurement. The method
 is more valuable than any individual diagnosis because inference systems
 surface new failure modes as workloads, models, and engines evolve.
 
+**A debugging session is a directed search, not a tour of dashboards.**
+
+```blockdiag
+flowchart LR
+    S["Symptom"] --> H["Hypotheses ranked by likelihood"]
+    H --> E["Metric, trace, or profile"]
+    E --> D{"Confirmed?"}
+    D -->|Yes| F["Fix and verify"]
+    D -->|No| H
+    F --> V["Regression gate"]
+```
+
+| Walkthrough | Symptom | Misleading signal | Actual cause |
+| --- | --- | --- | --- |
+| High TTFT | p95 rises from 480 to 1,400 ms | utilization drops | KV pressure triggers preemption and re-prefill |
+| OOM restarts | workers restart without a request pattern | memory looks stable between crashes | graph pools grow for unseen shapes |
+| ITL spikes | p99 exceeds 300 ms while median stays near 48 ms | decode kernel looks slow | long prefill chunks extend mixed steps |
+
 Two habits make the method sustainable. First, after every resolved
 incident, add the confirming signal to the monitoring stack. The
 preemption counter in Walkthrough 1, the reserved-allocated gap in
@@ -713,6 +696,6 @@ invasive; without a safe place to use it, operators are forced to choose
 between diagnosing the problem and serving traffic. A staging replica
 with trace replay eliminates that choice.
 
-Chapter 23 builds the operational framework -- alerting, runbooks,
+Chapter 24 builds the operational framework -- alerting, runbooks,
 deployments -- that turns these individual debugging skills into a
 team practice.

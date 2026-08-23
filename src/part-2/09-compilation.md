@@ -15,7 +15,14 @@ those spaces by doing more planning before the request arrives — but every
 artifact they produce must be paid for in warm-up time, memory, and padding,
 and each artifact is only worth its cost for the shapes that actually arrive.
 
-## Visual map
+## Eager execution pays as it goes
+
+In eager execution, the framework encounters operations and dispatches them at
+runtime. Each operation walks the same host path: the Python call enters the
+dispatcher, the dispatcher selects an implementation — the registry work of
+Chapter 8 — arguments are checked and marshaled, and a launch is issued. None
+of this work depends on the request content. The same shapes arrive thousands
+of times per second, and the host answers them identically each time.
 
 **Compilation moves repeated host work into reusable artifacts.**
 
@@ -30,45 +37,6 @@ flowchart LR
     D --> E
 ```
 
-**Graph buckets trade artifact count against padding and fallback.**
-
-```blockdiag
-flowchart TB
-    B["Requested batch size"] --> X{"Compatible captured bucket?"}
-    X -->|Exact| R["Replay exact graph"]
-    X -->|Larger bucket| P["Pad and replay"]
-    X -->|None| E["Compile or eager fallback"]
-    R --> M["Record dispatch outcome"]
-    P --> M
-    E --> M
-```
-
-**Mode dispatch tries the strictest key first and relaxes toward eager.**
-
-```blockdiag
-flowchart LR
-    K["Batch descriptor"] --> D{"Dispatch"}
-    D -->|"exact FULL key"| F["Full-graph replay"]
-    D -->|"relaxed PIECEWISE key"| P["Piecewise replay"]
-    P --> S1["Captured segment"] --> A["Attention boundary"] --> S2["Captured segment"]
-    D -->|"no matching key"| E["Eager execution"]
-```
-
-| Artifact outcome | Immediate cost | Long-term risk | Metric |
-| --- | --- | --- | --- |
-| exact replay | low launch overhead | artifact memory | exact-bucket hit rate |
-| padded replay | unused device work | latency at bucket gaps | padding ratio |
-| eager fallback | repeated launches | CPU gaps | fallback rate |
-| new compilation | warm-up and memory | artifact explosion | compile count and time |
-
-## Eager execution pays as it goes
-
-In eager execution, the framework encounters operations and dispatches them at
-runtime. Each operation walks the same host path: the Python call enters the
-dispatcher, the dispatcher selects an implementation — the registry work of
-Chapter 8 — arguments are checked and marshaled, and a launch is issued. None
-of this work depends on the request content. The same shapes arrive thousands
-of times per second, and the host answers them identically each time.
 
 The arithmetic explains why the gap exists at all. A large transformer runs
 roughly a dozen kernels per layer; at eighty layers that is near a thousand
@@ -151,6 +119,20 @@ Imagine capturing graphs for batch sizes 1, 2, 4, 8, 16, 32, and 64. A batch of
 possible size would avoid padding but consume more warm-up time and graph
 memory.
 
+**Graph buckets trade artifact count against padding and fallback.**
+
+```blockdiag
+flowchart TB
+    B["Requested batch size"] --> X{"Compatible captured bucket?"}
+    X -->|Exact| R["Replay exact graph"]
+    X -->|Larger bucket| P["Pad and replay"]
+    X -->|None| E["Compile or eager fallback"]
+    R --> M["Record dispatch outcome"]
+    P --> M
+    E --> M
+```
+
+
 This is a bucketing problem. Dense buckets reduce wasted work and increase the
 number of artifacts. Sparse buckets reduce artifacts and increase padding.
 Traffic distribution determines the right compromise. With power-of-two
@@ -196,6 +178,25 @@ SGLang attacks exactly that term — the second guided reading below shows how.
 
 A full graph captures the entire model step. It offers a simple replay path but
 fails when any region is too dynamic or incompatible.
+
+**Mode dispatch tries the strictest key first and relaxes toward eager.**
+
+```blockdiag
+flowchart LR
+    K["Batch descriptor"] --> D{"Dispatch"}
+    D -->|"exact FULL key"| F["Full-graph replay"]
+    D -->|"relaxed PIECEWISE key"| P["Piecewise replay"]
+    P --> S1["Captured segment"] --> A["Attention boundary"] --> S2["Captured segment"]
+    D -->|"no matching key"| E["Eager execution"]
+```
+
+| Artifact outcome | Immediate cost | Long-term risk | Metric |
+| --- | --- | --- | --- |
+| exact replay | low launch overhead | artifact memory | exact-bucket hit rate |
+| padded replay | unused device work | latency at bucket gaps | padding ratio |
+| eager fallback | repeated launches | CPU gaps | fallback rate |
+| new compilation | warm-up and memory | artifact explosion | compile count and time |
+
 
 A piecewise graph divides the model at deliberate boundaries. Static regions
 use graph replay while dynamic operations run between them. A breakable graph
@@ -361,8 +362,8 @@ When graph or compiler performance disappoints, separate four cases:
 - execution falls back to eager mode;
 - graph padding or memory constraints outweigh launch savings.
 
-Each case has its own metric in the visual map's table: compile count and time,
-exact-bucket hit rate, fallback rate, and padding ratio respectively. Use
+Each case has its own metric: compile count and time, exact-bucket hit rate,
+fallback rate, and padding ratio respectively. Use
 compiler logs, graph-dispatch metrics, and a GPU timeline. Compare cold, warm,
 and steady-state runs — a number that includes warm-up is answering a
 different question than one that does not. Record how many unique artifacts

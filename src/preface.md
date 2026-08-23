@@ -41,7 +41,7 @@ The implementation snapshot for this edition is:
 
 - vLLM commit `5cecfc01375052698823fc401e31518fb32a981e`;
 - SGLang commit `e161bd1265a0082478b7f1c09f224a52d315dc71`;
-- manuscript snapshot date: August 15, 2026.
+- manuscript snapshot date: August 23, 2026.
 
 Features on a development branch are evidence of a design under active use or
 investigation, not a promise of universal support. Every deployment must verify

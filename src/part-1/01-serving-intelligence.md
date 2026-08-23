@@ -1,4 +1,4 @@
-# 1. Serving Intelligence
+# 1. The Serving System: Decisions, State, and Ownership
 
 Imagine that you send a question to a customer-support assistant. The answer
 begins streaming half a second later and finishes a few seconds after that.
@@ -25,7 +25,9 @@ made at three different speeds, the state that must be protected along the
 way, and the trap of improving one part while the service gets worse. Every
 later chapter zooms into one region of this map.
 
-## Visual map
+## From model call to serving system
+
+It is useful to begin with a simple request life cycle:
 
 **One request crosses several queues and state owners.**
 
@@ -41,38 +43,6 @@ flowchart LR
     H["KV and session state"] <--> E
 ```
 
-**The three planes operate at different time scales but share evidence.**
-
-```blockdiag
-flowchart TB
-    M["Management plane: deploy and configure"] --> C["Control plane: place and recover"]
-    C --> D["Data plane: schedule and execute"]
-    D --> T["Metrics, logs, and traces"]
-    T --> C
-    T --> M
-```
-
-The first diagram follows one request left to right. Each arrow crosses an
-ownership boundary: the client owns nothing after send, the API owns the
-validated request, the router owns the placement decision, and the engine
-owns everything from admission onward. The state box hangs off the scheduler
-rather than the model runner because conversation state outlives any single
-step; the runner borrows it for the duration of one batch.
-
-The second diagram lifts the view. Requests flow through the data plane,
-while measurements flow back out of it. When something breaks, two questions
-come before any fix: which plane owns the failing decision, and which kind of
-state was being read or written?
-
-| Plane | Typical decision | State consulted | Decision cadence |
-| --- | --- | --- | --- |
-| Data | next token batch | request and block tables | every engine step |
-| Control | destination replica | queues, locality, health | every request or event |
-| Management | release and capacity | versions, policy, demand | minutes to days |
-
-## From model call to serving system
-
-It is useful to begin with a simple request life cycle:
 
 ```text
 receive -> validate -> prepare -> wait -> execute -> stream -> finish
@@ -118,36 +88,41 @@ instead of producing tokens at all. The stages survive, but their costs move.
 For this reason, a request is better understood as a small workflow than as
 one model invocation.
 
-### One request, one timeline
-
-The life cycle becomes concrete when the stages carry numbers. Assume an
-ordinary assistant turn: a 40-token prompt asking for roughly a 150-token
-answer, measured on a quiet deployment. Validation and limit checks cost about
-1 ms. Template insertion and tokenization cost about 3 ms. The engine admits
-the request immediately, finds room beside the conversations already running,
-and prefills the 40 prompt positions in about 60 ms. Decode then produces one
-token per step at roughly 11 ms per step, so the full answer takes about
-1,650 ms of stepping, streamed as it is produced. Finishing — releasing or
-retaining state — costs single-digit milliseconds plus whatever the retention
-policy decides to keep.
-
-Two observations fall out of the timeline. First, the model dominates: of
-roughly 1.7 seconds of work, all but a few tens of milliseconds is prefill
-and decode. Optimization effort aimed at tokenization would be misdirected
-for this shape. Second, the user does not experience the total. They perceive
-the time to the first token — here about 65 ms of preparation and prefill —
-and then the rhythm of the stream. A change that shortened the answer to 75
-tokens would halve the total work yet barely change how fast the service
-feels. Chapter 2 gives that intuition exact names.
-
-On a busy morning the same timeline changes in exactly one place: the wait
-between admission and first execution. Nothing about the model moved, yet the
-service feels several times slower — the distinction between the quiet and
-busy morning from the opening of this chapter, now visible as a stage.
+The precise single-request timeline belongs to Chapter 0. At this level, retain only the ownership map: the API owns validation, the router owns placement, the engine owns admitted work, and the output path owns ordered delivery. Load changes the time spent at those boundaries without changing the model itself. Chapter 2 names the resulting latency populations; Chapters 5 and 6 implement the engine boundaries and scheduling decisions.
 
 ## Three kinds of decisions
 
 As the workflow runs, the service makes decisions at different speeds.
+
+**The three planes operate at different time scales but share evidence.**
+
+```blockdiag
+flowchart TB
+    M["Management plane: deploy and configure"] --> C["Control plane: place and recover"]
+    C --> D["Data plane: schedule and execute"]
+    D --> T["Metrics, logs, and traces"]
+    T --> C
+    T --> M
+```
+
+The first diagram follows one request left to right. Each arrow crosses an
+ownership boundary: the client owns nothing after send, the API owns the
+validated request, the router owns the placement decision, and the engine
+owns everything from admission onward. The state box hangs off the scheduler
+rather than the model runner because conversation state outlives any single
+step; the runner borrows it for the duration of one batch.
+
+The second diagram lifts the view. Requests flow through the data plane,
+while measurements flow back out of it. When something breaks, two questions
+come before any fix: which plane owns the failing decision, and which kind of
+state was being read or written?
+
+| Plane | Typical decision | State consulted | Decision cadence |
+| --- | --- | --- | --- |
+| Data | next token batch | request and block tables | every engine step |
+| Control | destination replica | queues, locality, health | every request or event |
+| Management | release and capacity | versions, policy, demand | minutes to days |
+
 
 The **data plane** makes immediate decisions about current requests. It
 chooses the next batch, allocates memory, launches model work, samples
@@ -184,7 +159,7 @@ first step toward the fix.
 What connects the planes is evidence. Metrics, logs, and traces are produced
 by the data plane, aggregated for the control plane, and summarized for the
 management plane; each consumer needs a different resolution of the same
-events. This is why observability, Chapter 23's subject, is not a feature
+events. This is why observability, Chapter 24's subject, is not a feature
 added after the fact but the shared currency that lets three decision speeds
 coordinate without sharing a fate.
 
@@ -231,7 +206,7 @@ The **request record** (request state) is created at admission and mutated by
 the data plane as steps complete. Its identity is the request ID, and every
 downstream event must carry that ID or it cannot be attributed. If the
 engine crashes, the record dies with it: the client experiences a disconnect,
-and whether a retry is safe becomes an API contract question, which Chapter 21
+and whether a retry is safe becomes an API contract question, which Chapter 22
 develops.
 
 An **activation workspace** (execution state) exists for part of one step and
@@ -351,7 +326,7 @@ is roughly 100 ms of added time to first finish, paid by every user during
 every quiet period, in exchange for launch savings that mattered only when
 the GPU was already saturated. Whether the trade is right depends on the
 traffic distribution, which is why Chapter 9 treats bucket selection as a
-workload question and Chapter 22 insists on measuring it end to end.
+workload question and Chapter 23 insists on measuring it end to end.
 
 The same tension appears in many forms. Cache-aware routing can overload the
 replica with the best prefix. Large prefill chunks can improve GPU efficiency
@@ -438,7 +413,7 @@ computation that was not the bottleneck; the queue was.
 
 Cache value is therefore conditional on queue state, and a locality score
 that ignores queues is not a conservative approximation — it is a different
-decision. Chapter 16 builds routers that weigh both.
+decision. Chapter 17 builds routers that weigh both.
 
 The useful trace is not merely `router -> worker`. It records the router's
 queue estimate, matched-token estimate, decision time, and the worker that
@@ -471,6 +446,3 @@ object nobody is responsible for releasing. Then compare a replica with a
 the prefix in 240 ms. State which replica you choose and which two metrics
 would reveal a wrong choice in production. A worked answer is in [Appendix
 G](../appendices/g-worked-solutions.md#1-request-trace).
-
-In the next chapter, we will give those observations precise names and turn
-“fast” into a service objective that can be measured.

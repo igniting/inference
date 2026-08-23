@@ -1,4 +1,4 @@
-# 23. Observability, Reliability, and Operations
+# 24. Observability, Reliability, and Operations
 
 At 14:07, time to first token rises while GPU utilization falls. The model
 workers report no errors. Is the cause a tokenizer backlog, a failed graph
@@ -13,11 +13,16 @@ it owns, or the first incident becomes an archaeology dig with users as the
 time pressure. "No errors reported" usually means "no error path was
 instrumented," not "nothing is wrong."
 
-The discipline mirrors Chapter 22's: a diagnostic is an experiment whose
+The discipline mirrors Chapter 23's: a diagnostic is an experiment whose
 question is "which component broke," and like any experiment it needs its
 measurements designed before the event.
 
-## Visual map
+## Metrics show shape; traces show path
+
+Metrics summarize behavior over time. Useful families include arrival and
+completion rates, queue age, TTFT and ITL histograms, scheduled tokens, active
+sequences, memory pressure, cache matches, transferred bytes, graph dispatch,
+preemption, and errors.
 
 **Operations needs signals from the request path and its resource owners.**
 
@@ -32,32 +37,8 @@ flowchart LR
     D --> A["Safe action and rollback"]
 ```
 
-**Readiness progresses through model-specific startup stages.**
 
-```blockdiag
-flowchart LR
-    P["Process alive"] --> W["Weights loaded"]
-    W --> G["Distributed groups ready"]
-    G --> C["Kernels compiled and graphs captured"]
-    C --> H["Health execution passed"]
-    H --> R["Router membership ready"]
-```
-
-| Symptom | First split | Evidence | Unsafe shortcut |
-| --- | --- | --- | --- |
-| high TTFT, low GPU use | ingress versus engine wait | queue ages and traces | add accelerators blindly |
-| normal TTFT, high ITL | decode versus output path | step and stream gaps | tune prefill only |
-| memory pressure | live versus reusable state | blocks, references, eviction | restart without leak check |
-| one slow rank | compute versus communication | per-rank timeline | average utilization |
-
-## Metrics show shape; traces show path
-
-Metrics summarize behavior over time. Useful families include arrival and
-completion rates, queue age, TTFT and ITL histograms, scheduled tokens, active
-sequences, memory pressure, cache matches, transferred bytes, graph dispatch,
-preemption, and errors.
-
-Prefer queue *age* to queue *depth* as the headline signal — Chapter 20 made
+Prefer queue *age* to queue *depth* as the headline signal — Chapter 21 made
 the same discovery for realtime media. Depth conflates arrival rate with
 service rate: forty queued requests during a healthy 45 ms-step regime is a
 normal instant; forty queued requests whose oldest member has waited two
@@ -145,8 +126,8 @@ write-back, and stale location failures.
 For MoE, record tokens per expert and per rank, dispatch and combine duration,
 stragglers, and placement generation. For disaggregation, expose every stage
 queue and transfer boundary. These metrics translate the architecture into
-operational evidence: a Chapter 17 encoder queue age answers "is vision input
-the bottleneck" in one glance; a Chapter 19 weight-version gauge confirms
+operational evidence: a Chapter 18 encoder queue age answers "is vision input
+the bottleneck" in one glance; a Chapter 20 weight-version gauge confirms
 every rank serves the same policy before you blame the model.
 
 ### Inside an engine's statistics layer
@@ -169,19 +150,19 @@ per block. That is eviction-policy evidence in recordable form — if blocks are
 evicted idle-for-minutes and then requested seconds later, the retention
 policy is wrong in a way no hit-rate scalar would localize. `SchedulerStats`
 separates `prefix_cache_stats` from `connector_prefix_cache_stats`, keeping
-local hits distinct from distributed-cache hits so a Chapter 14 connector
+local hits distinct from distributed-cache hits so a Chapter 15 connector
 degradation cannot masquerade as a local-cache problem.
 
 Two more details repay study. `RequestStateStats` keeps timestamps in two
 domains on purpose: `arrival_time` is an "engine frontend timestamp
 (wall-clock)," while `queued_ts`, `scheduled_ts`, `first_token_ts` are "engine
-core timestamps (monotonic)" — the same dual-clock discipline Chapter 20
+core timestamps (monotonic)" — the same dual-clock discipline Chapter 21
 needed for media playout, applied to latency accounting, so cross-domain
 subtractions are explicit rather than accidental. And `SchedulerIterationDetails`
 carries an `is_dummy` flag alongside context-versus-generation token counts:
-Chapter 13's participation steps surface as a metric field, letting a
+Chapter 14's participation steps surface as a metric field, letting a
 dashboard separate real work from collective-synchronizing filler — the same
-distinction Chapter 22 demands of any honest throughput claim.
+distinction Chapter 23 demands of any honest throughput claim.
 
 ## Readiness is a sequence of states
 
@@ -190,10 +171,29 @@ distributed initialization, kernel compilation, graph capture, cache
 registration, and router membership may all need to finish before traffic is
 safe.
 
+**Readiness progresses through model-specific startup stages.**
+
+```blockdiag
+flowchart LR
+    P["Process alive"] --> W["Weights loaded"]
+    W --> G["Distributed groups ready"]
+    G --> C["Kernels compiled and graphs captured"]
+    C --> H["Health execution passed"]
+    H --> R["Router membership ready"]
+```
+
+| Symptom | First split | Evidence | Unsafe shortcut |
+| --- | --- | --- | --- |
+| high TTFT, low GPU use | ingress versus engine wait | queue ages and traces | add accelerators blindly |
+| normal TTFT, high ITL | decode versus output path | step and stream gaps | tune prefill only |
+| memory pressure | live versus reusable state | blocks, references, eviction | restart without leak check |
+| one slow rank | compute versus communication | per-rank timeline | average utilization |
+
+
 Liveness asks whether the process should be restarted. Readiness asks whether it
 should receive new work. A worker draining old requests is live and not ready
 for new ones. A worker blocked in a failed collective may have a running process
-and be unable to make progress — Chapter 13's participation requirement means a
+and be unable to make progress — Chapter 14's participation requirement means a
 hung collective looks like a paused engine, not a crashed one, so neither probe
 type catches it alone.
 
@@ -205,7 +205,7 @@ Make the startup stages themselves observable: publish each transition in the
 readiness diagram — weights loaded, groups joined, graphs captured, health
 execution passed — as a timestamped event or gauge, so "the replica is stuck"
 becomes "stuck at graph capture for six minutes," which names the component
-and often the fix before anyone logs in. Chapter 18's explicit capture
+and often the fix before anyone logs in. Chapter 9's explicit capture
 signatures make this natural: the set of captured signatures *is* readiness
 state, and reporting it costs one gauge.
 
@@ -222,7 +222,7 @@ state, and reporting it costs one gauge.
 Read the rightmost columns as the probe's blind spot. The dangerous failure is
 not choosing the weak probe — it is asking a weak probe a strong question:
 port checks answering "can this replica serve," or a single-shape health
-execution answering "all captured graphs work." Chapter 18's explicit capture
+execution answering "all captured graphs work." Chapter 9's explicit capture
 signatures give the staged gate something concrete to report; a health
 execution exercises one signature, so readiness should require the *set*, not
 sample it. Price matters too: a full forward pass every five seconds steals a
@@ -236,7 +236,7 @@ ones beats one probe asked to do both.
 "Same model" does not mean same service. A deployment is the combination of
 weights, tokenizer, model code, engine revision, kernel libraries, accelerator
 runtime, driver, configuration, and compiled artifacts. Pin and record that
-combination as one release identity — Chapter 21 made template and parser
+combination as one release identity — Chapter 22 made template and parser
 revisions part of served behavior, and operations extends the same identity to
 everything below them.
 
@@ -264,7 +264,7 @@ and paying only for what runs — attractive for bursty internal tools and
 multi-tenant platforms, and it lives or dies on the readiness sequence
 above. What can actually be made cheap? Weights are the bulk: pre-staged on
 local disk and warmed into the page cache, they load in seconds rather than
-minutes — Chapter 19's sleep levels already priced the extreme at a ~3 s host
+minutes — Chapter 20's sleep levels already priced the extreme at a ~3 s host
 snapshot against a multi-minute cold envelope. Compilation is next: captured
 graphs and tuned kernels serialize as artifacts (Chapter 9) if their capture
 was deterministic in shape set and environment, restoring in seconds;
@@ -295,13 +295,13 @@ execution environment.
 When queues exceed the service's ability to recover within the SLO, reject or
 shed work before the deployment collapses. Preserve capacity for health,
 cancellation, and high-priority traffic. The rejection itself must be priced
-like Chapter 16's admission veto: early and loud beats late and silent, and a
+like Chapter 17's admission veto: early and loud beats late and silent, and a
 shed request returns an actionable class (limit, overload, deadline) so callers
 can respond intelligently instead of retrying into the collapse.
 
 Graceful modes may reduce maximum output, disable expensive optional features,
 route to a smaller model, lower media quality, or pause background work. Each
-mode needs a product and correctness contract — Chapter 20's degradation ladder
+mode needs a product and correctness contract — Chapter 21's degradation ladder
 is the realtime instance, but batch endpoints deserve the same pre-agreed
 answers to "what may we stop doing."
 
@@ -321,14 +321,14 @@ environment.
 
 For every test, observe detection time, user impact, cleanup, retry behavior,
 and recovery. A failover that restores traffic while leaking blocks will cause
-a second incident later — the pass criterion includes the Chapter 21 assertion
+a second incident later — the pass criterion includes the Chapter 22 assertion
 that KV references return to baseline, not merely that errors stopped.
 
 Detection time has an architecture-implied bound worth checking in the drill.
 If router membership uses a lease with a 5-second renewal period, a dead
 tensor-parallel rank should leave routing within roughly one lease period
-after its group stalls — Chapter 16's membership epochs are the fence. User
-impact should then be bounded by drain behavior: reusing Chapter 19's handoff
+after its group stalls — Chapter 17's membership epochs are the fence. User
+impact should then be bounded by drain behavior: reusing Chapter 20's handoff
 arithmetic, draining 400 running requests at one 45 ms engine step each takes
 about 18 seconds, so a clean failover of a loaded replica costs roughly that
 long of elevated latency on the affected route. If the drill shows 4 minutes
@@ -339,7 +339,7 @@ propagating membership, and no amount of capacity would have fixed it.
 Disaggregated systems deserve coupled tests. If the decode pool fails while
 prefill remains healthy, admission should stop before completed KV state piles
 up. If the remote cache fails, the service may degrade to recomputation rather
-than becoming unavailable — at Chapter 16's prices, recomputing a cached 4,000-
+than becoming unavailable — at Chapter 17's prices, recomputing a cached 4,000-
 token prefix costs about `4,000 × 0.06 = 240 ms` of rework, which is the
 number that decides whether cache-loss degradation meets the TTFT budget or
 should shed load instead.
@@ -349,8 +349,8 @@ should shed load instead.
 A rolling deployment needs a model and engine compatibility boundary. Drain
 requests before replacing workers that own nonmigratable state. Keep cache and
 artifact namespaces separate across versions. Do not send a live session to a
-new tokenizer or weight version without an explicit migration — Chapter 19's
-weight transactions and Chapter 16's cache-version bumping are the mechanisms;
+new tokenizer or weight version without an explicit migration — Chapter 20's
+weight transactions and Chapter 17's cache-version bumping are the mechanisms;
 deployment orchestration is what must refuse to bypass them.
 
 Canary traffic should represent the shapes and features most likely to expose
@@ -403,7 +403,7 @@ First split: ingress and tokenizer queue age. If those queues are deep, the
 engine is innocent — route around or scale that tier, and rollback is simply
 removing the temporary capacity once the backlog drains. If they are normal,
 inspect engine admission age and *reasons*: a surge in remote-cache waits
-points at a Chapter 14 dependency, not insufficient GPUs. Third, compare
+points at a Chapter 15 dependency, not insufficient GPUs. Third, compare
 scheduled prefill tokens against graph-fallback and compilation events — a new
 shape compiling mid-incident argues for stopping canary traffic on that route,
 retaining the old artifact, rather than touching workers at all. Only then do
@@ -421,14 +421,14 @@ counts, and end-to-end goodput — every field mapping to one branch above.
 
 ## Practice: write and test the runbook
 
-Build a dashboard for the Chapter 14 pipeline and inject 500 ms into KV
+Build a dashboard for the Chapter 15 pipeline and inject 500 ms into KV
 transfers. Write the high-TTFT/low-utilization runbook with expected metric
 ranges, safe actions, and rollback at every branch.
 
 Measure detection, user impact, cancellation cleanup, recomputation, leaked
 blocks, and recovery. Give the runbook to an engineer who did not build the
 system. The worked branch structure is in
-[Appendix G](../appendices/g-worked-solutions.md#23-operations-runbook).
+[Appendix G](../appendices/g-worked-solutions.md#24-operations-runbook).
 
 The final chapter brings the technical choices together with cost, security,
 and organizational ownership.

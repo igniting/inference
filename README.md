@@ -41,7 +41,7 @@ Pages.
 
 - [x] Define the thesis, audience, and boundaries
 - [x] Establish an evidence and originality policy
-- [x] Draft all 27 chapters and seven appendices
+- [x] Draft all 27 chapters and nine appendices
 - [x] Compare coverage and pedagogy with the supplied reference book
 - [x] Revise the complete manuscript after editorial critique
 - [x] Replace open-ended exercises with worked examples and full solutions

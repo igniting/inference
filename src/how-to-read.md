@@ -18,13 +18,13 @@ path suits engineers designing an inference platform.
 
 ## The performance path
 
-Read Chapters 0, 2–4, then 6–15, then 22. Keep a real workload trace beside
+Read Chapters 0, 2–4, then 6–16, then 23. Keep a real workload trace beside
 you. For every mechanism, write down the expected change in compute, memory
 traffic, communication, queueing, and quality before measuring it.
 
 ## The operations path
 
-Read Chapters 0, 1, 2, 5–7, 14–16, and 21–24. This path emphasizes service
+Read Chapters 0, 1, 2, 5–7, 15–17, 22–26, and Appendix I. This path emphasizes service
 semantics, overload, distributed state, routing, observability, security, and
 cost.
 
@@ -32,8 +32,8 @@ cost.
 
 If you already run vLLM or SGLang in production and want to optimize, read
 Chapter 0 to calibrate, then jump to the problem-oriented table below. After
-solving your immediate problem, read Chapter 22B (debugging) and Appendix D2
-(decision checklists) to build a systematic approach.
+solving your immediate problem, read Appendix I (debugging) and Appendix D
+(deployment patterns and decision checklists) to build a systematic approach.
 
 ## Problem-oriented navigation
 
@@ -42,18 +42,18 @@ front to back.
 
 | Problem | Start with | Then read |
 | --- | --- | --- |
-| "My TTFT is too high under load" | Ch. 6 (scheduling, chunked prefill) | Ch. 7 (KV budget), Ch. 14 (P/D disaggregation), Ch. 22 (benchmark method) |
-| "I need to serve a model that does not fit on one GPU" | Ch. 4 (hardware topology), Ch. 12 (parallelism) | Ch. 13 (MoE), Appendix B (memory worksheet) |
-| "I want to add LoRA adapters in production" | Ch. 11B (adapter serving) | Ch. 7 (paged adapter state), Ch. 16 (routing with adapters) |
-| "Latency spikes during decode" | Ch. 6 (preemption), Ch. 8 (attention backends) | Ch. 9 (graph buckets and padding), Ch. 22 (isolating variables) |
-| "I need structured JSON output reliably" | Ch. 11 (constrained decoding) | Ch. 21 (API contracts, grammar backends) |
-| "How do I benchmark properly?" | Ch. 22 (performance science) | Appendix C (benchmark cookbook), Ch. 2 (SLO definitions) |
-| "Cache hit rates are low across replicas" | Ch. 15 (distributed caching) | Ch. 16 (cache-aware routing), Ch. 7 (prefix cache) |
-| "I need to serve on AMD or non-NVIDIA hardware" | Appendix B2 (hardware portability) | Ch. 4 (topology), Ch. 8 (backend selection), Ch. 9 (compilation) |
-| "Deploying to production for the first time" | Ch. 0 (first request), Ch. 23 (operations) | Ch. 21 (API boundaries), Appendix D (deployment patterns) |
-| "I need to serve multimodal or diffusion models" | Ch. 17 (multimodal), Ch. 18 (diffusion) | Ch. 14 (E/P/D disaggregation) |
-| "How do I debug a serving issue?" | Ch. 22B (debugging guide) | Ch. 23 (observability), Appendix D2 (decision checklists) |
-| "Cost per request is too high" | Ch. 24 (economics) | Ch. 10 (quantization), Ch. 11 (speculation), Ch. 14 (disaggregation) |
+| "My TTFT is too high under load" | Ch. 6 (scheduling, chunked prefill) | Ch. 7 (KV budget), Ch. 15 (P/D disaggregation), Ch. 23 (benchmark method) |
+| "I need to serve a model that does not fit on one GPU" | Ch. 4 (hardware topology), Ch. 13 (parallelism) | Ch. 14 (MoE), Appendix B (memory worksheet) |
+| "I want to add LoRA adapters in production" | Ch. 12 (adapter serving) | Ch. 7 (paged state), Ch. 17 (routing with adapters) |
+| "Latency spikes during decode" | Ch. 6 (preemption), Ch. 8 (attention backends) | Ch. 9 (graph buckets and padding), Ch. 23 (isolating variables) |
+| "I need structured JSON output reliably" | Ch. 22 (API contracts and grammar backends) | Ch. 11 (speculative verification) |
+| "How do I benchmark properly?" | Ch. 23 (performance science) | Appendix C (benchmark cookbook), Ch. 2 (SLO definitions) |
+| "Cache hit rates are low across replicas" | Ch. 16 (distributed caching) | Ch. 17 (cache-aware routing), Ch. 7 (prefix cache) |
+| "I need to serve on AMD or non-NVIDIA hardware" | Appendix B (hardware and portability) | Ch. 4 (topology), Ch. 8 (backend selection), Ch. 9 (compilation) |
+| "Deploying to production for the first time" | Ch. 0 (first request), Ch. 24 (operations) | Ch. 22 (API boundaries), Appendix D (deployment patterns) |
+| "I need to serve multimodal or diffusion models" | Ch. 18 (multimodal), Ch. 19 (diffusion) | Ch. 15 (E/P/D disaggregation) |
+| "How do I debug a serving issue?" | Appendix I (debugging playbook) | Ch. 24 (observability), Appendix D (decision checklists) |
+| "Cost per request is too high" | Ch. 25 (economics) | Ch. 10 (quantization), Ch. 11 (speculation), Ch. 15 (disaggregation) |
 
 Each row leads to a self-contained reading sequence. The first column
 is the starting point; subsequent chapters fill in the mechanisms and
@@ -80,7 +80,8 @@ questions from the introduction as fields you can fill in for any system:
 Variables are introduced near their use and collected in Appendix A. Numeric
 examples are intentionally small enough to inspect. They teach a method, not a
 capacity promise. Hardware throughput, software support, and repository APIs
-change; the source ledger pins the evidence used for this edition.
+change; the source ledger pins the evidence used for this edition. Chapter 0's
+reference card is the canonical definition of the Atlas planning constants.
 
 Commands are illustrative unless a chapter labels them as tested. Never copy a
 serving configuration into production without checking the model license,

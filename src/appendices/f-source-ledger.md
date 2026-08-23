@@ -10,7 +10,7 @@ not prove production readiness or performance on every platform.
 | --- | --- | --- |
 | [vLLM](https://github.com/vllm-project/vllm) | `5cecfc01375052698823fc401e31518fb32a981e` | implementation study |
 | [SGLang](https://github.com/sgl-project/sglang) | `e161bd1265a0082478b7f1c09f224a52d315dc71` | implementation study |
-| Manuscript | August 15, 2026 | claim cutoff |
+| Manuscript | August 23, 2026 | claim cutoff |
 | [Inference Engineering](https://www.baseten.co/inference-engineering/), Philip Kiely | supplied 259-page PDF, modified January 29, 2026 | editorial comparison only |
 
 The supplied book informed the coverage audit and standards for approachability.
@@ -128,8 +128,14 @@ Its prose, diagrams, examples, analogies, and chapter sequence were not reused.
   cache, parallelism, disaggregation, compilation, multimodal, and training
   integration guides.
 - [vLLM architecture overview](https://docs.vllm.ai/en/stable/design/arch_overview.html).
-- [SGLang documentation](https://docs.sglang.io/), including attention backends,
+- [vLLM batch invariance](https://docs.vllm.ai/en/latest/features/batch_invariance/)
+  and [pooling models](https://docs.vllm.ai/en/latest/models/pooling_models/).
+- [SGLang documentation](https://docs.sglang.ai/), including attention backends,
   distributed serving, observability, post-training, and diffusion.
+- [SGLang deterministic inference](https://docs.sglang.ai/advanced_features/deterministic_inference.html),
+  [reasoning parsers](https://docs.sglang.ai/advanced_features/separate_reasoning.html),
+  [embeddings](https://docs.sglang.ai/basic_usage/openai_api_embeddings.html),
+  and [prefill/decode disaggregation](https://docs.sglang.io/docs/advanced_features/pd_disaggregation).
 - [SGLang Diffusion](https://docs.sglang.io/docs/sglang-diffusion).
 
 Documentation can describe a release different from the pinned source snapshot.
@@ -155,19 +161,21 @@ client-side renderer cannot load.
 | --- | --- | --- |
 | 1, 5 | `vllm/v1/engine`, `vllm/v1/executor`, `vllm/v1/worker` | `srt/managers`, `srt/model_executor` |
 | 6 | `vllm/v1/core/sched/scheduler.py` | `srt/managers/scheduler.py`, `overlap_utils.py` |
-| 7, 15 | `vllm/v1/core/kv_cache_manager.py`, `distributed/kv_transfer` | `srt/mem_cache/radix_cache.py`, `hiradix_cache.py` |
+| 7, 16 | `vllm/v1/core/kv_cache_manager.py`, `distributed/kv_transfer` | `srt/mem_cache/radix_cache.py`, `hiradix_cache.py` |
 | 8 | `vllm/v1/attention/backends`, quantized and MoE kernels | `srt/layers/attention`, `kernels` |
 | 9 | `vllm/compilation`, `vllm/v1/cudagraph_dispatcher.py` | `srt/model_executor/runner_backend`, `srt/compilation` |
 | 10 | `model_executor/layers/quantization` | `srt/layers/quantization` |
-| 11 | `vllm/v1/spec_decode`, `vllm/v1/structured_output` | `srt/speculative`, `srt/constrained` |
-| 11b | `vllm/lora`, `vllm/v1/core/sched` (adapter-aware paths) | `srt/lora`, adapter manager paths |
-| 12, 13 | `distributed/parallel_state.py`, `distributed/eplb` | `srt/distributed`, `srt/eplb` |
-| 14 | `distributed/kv_transfer/kv_connector` | `srt/disaggregation` |
-| 17 | scheduler encoder cache, `distributed/ec_transfer` | multimodal managers and encode disaggregation |
-| 18 | diffusion model and runner paths | `multimodal_gen/runtime` |
-| 19 | sleep and weight-transfer paths | scheduler and model-runner weight updaters |
-| 21 | `entrypoints`, `parser`, `structured_output` | `srt/entrypoints`, `srt/constrained` |
-| 22, 22b, 23 | benchmark and metrics packages, `/metrics` endpoint | benchmark, metrics, tracing, simulator, and `/get_server_info` |
+| 11 | `vllm/v1/spec_decode` | `srt/speculative` |
+| 12 | `vllm/lora`, `vllm/v1/core/sched` (adapter-aware paths) | `srt/lora`, adapter manager paths |
+| 13, 14 | `distributed/parallel_state.py`, `distributed/eplb` | `srt/distributed`, `srt/eplb` |
+| 15 | `distributed/kv_transfer/kv_connector` | `srt/disaggregation` |
+| 17 | request router and KV-event paths | router, scheduler, and cache-affinity paths |
+| 18 | scheduler encoder cache, `distributed/ec_transfer` | multimodal managers and encode disaggregation |
+| 19 | diffusion model and runner paths | `multimodal_gen/runtime` |
+| 20 | sleep and weight-transfer paths | scheduler and model-runner weight updaters |
+| 21 | reasoning parser and request-state paths | reasoning parsers and session managers |
+| 22 | `entrypoints`, `parser`, `structured_output` | `srt/entrypoints`, `srt/constrained` |
+| 23, 24, Appendix I | benchmark and metrics packages, `/metrics` endpoint | benchmark, metrics, tracing, simulator, and `/get_server_info` |
 
 ## Reproducibility status
 

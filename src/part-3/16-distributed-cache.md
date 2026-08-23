@@ -1,4 +1,4 @@
-# 15. Hierarchical and Distributed Caching
+# 16. Hierarchical and Distributed Model-State Caching
 
 One worker finishes processing a 40,000-token document. Ten minutes later,
 another request asks a new question about the same document—but the router
@@ -13,41 +13,6 @@ consistency problem. The cache stops being a data structure and becomes a
 small distributed system with its own failure modes — which is why this
 chapter spends more time on publication protocols and invalidation than on
 hit rates.
-
-## Visual map
-
-**A hierarchical cache trades increasing capacity for increasing access cost.**
-
-```blockdiag
-flowchart LR
-    G["GPU KV blocks"] <--> H["Host memory"]
-    H <--> L["Local storage"]
-    L <--> R["Remote cache"]
-    R <--> O["Durable object storage"]
-```
-
-**A remote hit becomes usable only after an ordered publication protocol.**
-Every arrow below can fail or be cancelled independently; the protocol's job
-is to make sure each failure leaves the system in the state the step before it
-would have left.
-
-```blockdiag
-flowchart LR
-    I["Validate semantic identity"] --> M["Resolve location metadata"]
-    M --> A["Allocate destination blocks"]
-    A --> T["Transfer and checksum"]
-    T --> P["Publish local visibility"]
-    P --> U["Use with reference or lease"]
-    U --> E["Evict visibility then storage"]
-```
-
-| Tier | Capacity | Access shape | Best candidate |
-| --- | --- | --- | --- |
-| GPU | smallest | direct attention reads | active and hottest prefixes |
-| Host memory | larger | device transfer | recently evicted state |
-| Local storage | larger still | bulk sequential load | warm deployment-local state |
-| Remote cache | shared | network transfer and metadata | reused state across replicas |
-| Durable storage | largest | high latency | artifacts worth reconstructing later |
 
 ## Recompute, retain, or transfer
 
@@ -67,7 +32,7 @@ expected reuse value
 The three costs are computable for real state, and they are not close.
 Recompute price comes straight from Appendix G's standing constant: at
 0.06 ms per token, recomputing a 40,000-token document costs 2.4 seconds of
-GPU time. Transfer price uses Chapter 14's KV link: the document's
+GPU time. Transfer price uses Chapter 15's KV link: the document's
 40,000 × 320 KiB = 12.2 GiB move in about 565 ms at 22 GiB/s including the
 12 ms setup. Retention price is the tier's
 capacity times how long the state waits — 12.2 GiB parked in host memory is
@@ -91,7 +56,7 @@ The three prices side by side, using the constants above:
 | 6,000 tokens | 360 ms | 1.83 GiB ≈ 85 ms + setup | transfer pays on second use |
 | 40,000 tokens | 2.4 s | 12.2 GiB ≈ 565 ms | always retain something |
 
-The middle row is Chapter 14's boundary seen from the cache's side of the
+The middle row is Chapter 15's boundary seen from the cache's side of the
 glass, and the setup term matters more than the byte count for small state:
 a 156 MiB transfer spends 12 ms of its 19 ms on setup, so tiny prefixes
 travel badly no matter how fast the link is.
@@ -101,6 +66,17 @@ travel badly no matter how fast the link is.
 A practical hierarchy might include GPU memory, host memory, local NVMe, and a
 remote memory or storage service. The fastest tier holds active request state
 and the hottest reusable blocks. Lower tiers trade access time for capacity.
+
+**A hierarchical cache trades increasing capacity for increasing access cost.**
+
+```blockdiag
+flowchart LR
+    G["GPU KV blocks"] <--> H["Host memory"]
+    H <--> L["Local storage"]
+    L <--> R["Remote cache"]
+    R <--> O["Durable object storage"]
+```
+
 
 Promotion moves a block toward the GPU when reuse becomes likely. Demotion or
 write-back preserves an evicted block in a lower tier. Prefetch begins a load
@@ -166,7 +142,7 @@ Prefetch has its own guardrails. The storage backend parses a
 exception.
 
 vLLM's offloading model reaches the same shape through the connector
-interface of Chapter 14. In
+interface of Chapter 15. In
 [`offloading/common.py`](https://github.com/vllm-project/vllm/blob/5cecfc01375052698823fc401e31518fb32a981e/vllm/distributed/kv_transfer/kv_connector/v1/offloading/common.py),
 a `TransferJob` bundles `req_id` with a source and destination `LoadStoreSpec`
 and is "keyed by scheduler-assigned job ID. The worker reports the job ID back
@@ -216,12 +192,36 @@ A cache directory answers where a prefix or block can be found. The bulk data
 path moves the tensor state. Keeping them separate allows small metadata updates
 to propagate without routing large buffers through the control service.
 
+**A remote hit becomes usable only after an ordered publication protocol.**
+Every arrow below can fail or be cancelled independently; the protocol's job
+is to make sure each failure leaves the system in the state the step before it
+would have left.
+
+```blockdiag
+flowchart LR
+    I["Validate semantic identity"] --> M["Resolve location metadata"]
+    M --> A["Allocate destination blocks"]
+    A --> T["Transfer and checksum"]
+    T --> P["Publish local visibility"]
+    P --> U["Use with reference or lease"]
+    U --> E["Evict visibility then storage"]
+```
+
+| Tier | Capacity | Access shape | Best candidate |
+| --- | --- | --- | --- |
+| GPU | smallest | direct attention reads | active and hottest prefixes |
+| Host memory | larger | device transfer | recently evicted state |
+| Local storage | larger still | bulk sequential load | warm deployment-local state |
+| Remote cache | shared | network transfer and metadata | reused state across replicas |
+| Durable storage | largest | high latency | artifacts worth reconstructing later |
+
+
 Events can announce block creation, removal, or movement. Consumers need a way
 to handle delayed or reordered events. A location advertised moments ago may
 already be evicted. Treat directory results as hints until the source confirms
 and pins the data — concretely: the entry carries a version and the source's
 answer to "do you still hold this" is the only thing that converts the hint
-into a transfer. Chapter 20 meets the same problem from the other side, where
+into a transfer. Chapter 21 meets the same problem from the other side, where
 stale events must be discarded by generation counter rather than trusted.
 
 The request lifecycle can look like this:
@@ -253,7 +253,7 @@ comment explains why every rank must enter the collective unconditionally:
 "`ongoing_write_through` can diverge across ranks (e.g. write_backup
 returning 0 on a subset under host memory pressure), so a conditional skip
 desyncs the NCCL op sequence and deadlocks under TP > 1." This is the same
-lesson Chapter 13's EPLB dummy steps taught: participation in collectives is
+lesson Chapter 14's EPLB dummy steps taught: participation in collectives is
 part of correctness, independent of whether this rank has work. On the load
 path, `loading_check` pairs each completed load-back with
 `dec_lock_ref(end_node)` — the pin taken when the transfer started is
@@ -301,7 +301,7 @@ Popular prefixes may be replicated deliberately. Replication uses more cache
 capacity and allows several replicas to share traffic. The control plane should
 measure demand before copying and remove replicas when popularity fades —
 replication decisions deserve the same amortization arithmetic as EPLB's
-weight movement in Chapter 13, with cache bytes standing in for expert
+weight movement in Chapter 14, with cache bytes standing in for expert
 weights.
 
 ## Security changes the cache key and policy
@@ -368,7 +368,7 @@ alternatives solve the problem. This table helps decide.
 | Situation | First action | Add a tier if |
 | --- | --- | --- |
 | Users repeat the same system prompt | Enable local prefix caching (Ch. 7) | Hit rate plateaus below 50% across replicas |
-| Documents are queried multiple times | Cache-aware routing (Ch. 16) | Document popularity is too uniform for affinity |
+| Documents are queried multiple times | Cache-aware routing (Ch. 17) | Document popularity is too uniform for affinity |
 | KV eviction is frequent under load | Right-size `max-num-seqs` first | Eviction remains high after KV budget tuning |
 | Session state spans multiple turns | Session affinity routing | Sessions outlive replica restarts |
 | Multi-replica fleet, no prefix sharing | Start with cache-aware routing | Routing cannot cover the overlap pattern |
@@ -423,7 +423,4 @@ Mark every point where completion requires agreement across ranks and say
 which mechanism (MIN-reduce, worker-count, or single-owner publish) you rely
 on. If any transition delegates correctness to “the cache,” refine it. The
 worked
-lifecycle is in [Appendix G](../appendices/g-worked-solutions.md#15-distributed-prefix-lifecycle).
-
-A distributed cache provides locality information to the control plane. The
-next chapter considers how that plane routes and scales the service as a whole.
+lifecycle is in [Appendix G](../appendices/g-worked-solutions.md#16-distributed-prefix-lifecycle).

@@ -1,4 +1,4 @@
-# 11b. Adapter Serving and Multi-Tenant Customization
+# 12. Adapter Serving and Multi-Tenant Customization
 
 A single base model can serve many customers, but not all customers want the
 same model. A legal team needs answers tuned for contract language. A medical
@@ -19,55 +19,6 @@ are invisible until they produce wrong answers or surprise latency. This
 chapter treats adapter serving as the scheduling, memory, and routing problem
 it becomes at scale.
 
-## Visual map
-
-**Adapter weights are thin overlays on the shared base model.**
-
-```blockdiag
-flowchart LR
-    B["Base weights (read-only, 140 GB)"] --> F["Forward pass"]
-    A1["Adapter A weights (~160 MiB)"] --> F
-    A2["Adapter B weights (~160 MiB)"] --> F
-    F --> O["Per-request output"]
-```
-
-**Multi-adapter scheduling groups requests by active adapter within a mixed
-batch.**
-
-```blockdiag
-flowchart TB
-    Q["Waiting requests with adapter tags"] --> S["Adapter-aware scheduler"]
-    S --> G1["Group: Adapter A requests"]
-    S --> G2["Group: Adapter B requests"]
-    S --> G3["Group: base-only requests"]
-    G1 --> M["Mixed batch with per-request adapter pointers"]
-    G2 --> M
-    G3 --> M
-    M --> E["Execute one step"]
-```
-
-**Adapter placement turns routing into a three-term cost.**
-
-```blockdiag
-flowchart TB
-    R["Request with adapter tag"] --> C["Candidate replica"]
-    C --> QT["Estimate queue time"]
-    C --> PT["Estimate missing-prefix compute"]
-    C --> AT["Estimate adapter-load time"]
-    QT --> SC["Combined routing score"]
-    PT --> SC
-    AT --> SC
-    SC --> D["Choose destination"]
-```
-
-| Adapter concern | Interacts with | Observable cost |
-| --- | --- | --- |
-| weight memory | KV cache budget | fewer concurrent sequences |
-| batch composition | scheduler, CUDA graphs | switching or padding overhead |
-| cache identity | prefix sharing | invalid reuse across adapters |
-| cold loading | routing, TTFT | hundreds of ms on first use |
-| graph capture | compilation warm-up | multiplicative graph count |
-
 ## What an adapter adds to a forward pass
 
 A LoRA adapter decomposes a weight update into two low-rank matrices. Where the
@@ -79,6 +30,17 @@ gives A and B matrices of `8192 x 16` each. At BF16, one such pair costs
 across 80 layers, a rank-16 adapter totals about `4 x 512 KiB x 80 = 160 MiB`.
 Extending to MLP layers (gate, up, down projections) roughly doubles that to
 320 MiB -- still less than 0.25 percent of the 140 GB base model.
+
+**Adapter weights are thin overlays on the shared base model.**
+
+```blockdiag
+flowchart LR
+    B["Base weights (read-only, 140 GB)"] --> F["Forward pass"]
+    A1["Adapter A weights (~160 MiB)"] --> F
+    A2["Adapter B weights (~160 MiB)"] --> F
+    F --> O["Per-request output"]
+```
+
 
 The compute is proportionally small. Each adapted layer adds two matrix
 multiplications of rank r against the batch. At rank 16 the extra FLOPs per
@@ -126,7 +88,7 @@ A rank-16 adapter at 160 MiB transfers over PCIe Gen5 x16 (64 GB/s) in about
 2.5 ms. In practice, the transfer is not the whole cost: the engine must
 allocate destination buffers, update pointer tables, and potentially
 invalidate CUDA graphs. Measured cold-load times for typical adapters run 20
-to 100 ms from host memory -- the number Chapter 16 priced at 800 ms includes
+to 100 ms from host memory -- the number Chapter 17 priced at 800 ms includes
 disk-resident adapters on a cold path with no pipelining.
 
 ### S-LoRA's unified paging
@@ -171,6 +133,22 @@ SGLang's adapter support at the pinned revision lives under
 
 ### Batching across adapters
 
+**Multi-adapter scheduling groups requests by active adapter within a mixed
+batch.**
+
+```blockdiag
+flowchart TB
+    Q["Waiting requests with adapter tags"] --> S["Adapter-aware scheduler"]
+    S --> G1["Group: Adapter A requests"]
+    S --> G2["Group: Adapter B requests"]
+    S --> G3["Group: base-only requests"]
+    G1 --> M["Mixed batch with per-request adapter pointers"]
+    G2 --> M
+    G3 --> M
+    M --> E["Execute one step"]
+```
+
+
 The simplest approach batches all requests together regardless of adapter.
 The base-model forward pass runs once for the full batch, and each sequence's
 adapter contribution is added through gathered low-rank products. This is what
@@ -197,7 +175,7 @@ overlap with compute: while the GPU executes early layers, the engine can
 transfer a cold adapter's weights for later layers. Layer 40's adapter
 weights are not needed until the forward pass reaches layer 40, so they can
 arrive while layers 0 through 39 execute. This is the same overlap principle
-Chapter 14 applied to KV transfer in disaggregated serving, and the
+Chapter 15 applied to KV transfer in disaggregated serving, and the
 opportunity is better here because adapter weights are smaller than
 multi-gigabyte KV images.
 
@@ -222,13 +200,36 @@ of batch capacity and need protection from indefinite deferral.
 
 ### Each replica holds a different adapter set
 
+**Adapter placement turns routing into a three-term cost.**
+
+```blockdiag
+flowchart TB
+    R["Request with adapter tag"] --> C["Candidate replica"]
+    C --> QT["Estimate queue time"]
+    C --> PT["Estimate missing-prefix compute"]
+    C --> AT["Estimate adapter-load time"]
+    QT --> SC["Combined routing score"]
+    PT --> SC
+    AT --> SC
+    SC --> D["Choose destination"]
+```
+
+| Adapter concern | Interacts with | Observable cost |
+| --- | --- | --- |
+| weight memory | KV cache budget | fewer concurrent sequences |
+| batch composition | scheduler, CUDA graphs | switching or padding overhead |
+| cache identity | prefix sharing | invalid reuse across adapters |
+| cold loading | routing, TTFT | hundreds of ms on first use |
+| graph capture | compilation warm-up | multiplicative graph count |
+
+
 In a fleet of replicas, not every replica needs every adapter. If the hot set
 is 5 adapters covering 80 percent of traffic, those 5 should be resident on
 every replica. The remaining 45 can be distributed: some replicas hold
 adapters 6 through 25, others hold 26 through 50. A request for adapter 37
 routes to a replica that already has it, avoiding the cold-load penalty.
 
-This is the adapter term in Chapter 16's routing score:
+This is the adapter term in Chapter 17's routing score:
 
 ```text
 cost(R) = queue(R) + missing_tokens(R) x 0.06 ms
@@ -237,7 +238,7 @@ cost(R) = queue(R) + missing_tokens(R) x 0.06 ms
 
 The `adapter_load(R)` term is zero when the target replica already holds the
 requested adapter and nonzero -- potentially hundreds of milliseconds --
-when it does not. Chapter 16 priced the loss: sending a request to a replica
+when it does not. Chapter 17 priced the loss: sending a request to a replica
 without its adapter costs 800 ms of foreground load time on first use, which
 dominates both the queue and missing-prefix terms in most scenarios.
 
@@ -439,7 +440,7 @@ Measure:
 - 99th-percentile TTFT for each strategy.
 
 The worked calculation is in
-[Appendix G](../appendices/g-worked-solutions.md#11b-adapter-routing-simulation).
+[Appendix G](../appendices/g-worked-solutions.md#12-adapter-routing-simulation).
 
 Adapter serving is a memory, scheduling, and routing problem with a
 distinctive shape: the weight overhead per adapter is small, but the

@@ -1,4 +1,4 @@
-# 10. Quantization and Numerical Behavior
+# 10. Quantization, Precision, and Determinism
 
 A model's weights may occupy hundreds of gigabytes in a 16-bit format. Storing
 the same number of values in 8 or 4 bits can make the model fit on fewer devices
@@ -12,7 +12,14 @@ format the target GPU cannot execute natively can end up slower than the
 what the model says. This chapter treats quantization as a systems decision
 with a quality gate, not a compression setting.
 
-## Visual map
+## Values, ranges, and scales
+
+Floating-point formats divide their bits among sign, exponent, and significand.
+Integer quantization usually maps a range of real values onto a small set of
+integers using a scale and sometimes a zero point. A scale says how wide each
+integer step is; a zero point says where the real value zero lands inside the
+integer range. Symmetric schemes skip the zero point and spend everything on
+step width.
 
 **Quantization inserts representation changes into the execution path.**
 
@@ -25,48 +32,6 @@ flowchart LR
     K --> O["Output logits"]
 ```
 
-**A deployable format must pass both a systems gate and a quality gate.**
-
-```blockdiag
-flowchart TB
-    F["Candidate format"] --> M{"Fits memory and has target kernels?"}
-    M -->|No| R["Reject for this platform"]
-    M -->|Yes| P["Measure workload performance"]
-    P --> Q{"Passes product quality and stability?"}
-    Q -->|No| R
-    Q -->|Yes| D["Deploy for the qualifying tier"]
-```
-
-**A quantized multiply is a real multiply plus a scale, a round, and a wider
-accumulator.**
-
-```blockdiag
-flowchart LR
-    R["Real weights (BF16)"] --> G{"Pick one scale per group"}
-    G --> I["Store integers (4/8 bit)"]
-    G --> S["Store scales (FP16)"]
-    I --> K["Kernel loads both"]
-    S --> K
-    K --> DQ["Dequantize: w ≈ scale × int"]
-    DQ --> ACC["Accumulate in wide type"]
-    R -.->|"rounding loses outlier detail"| I
-```
-
-| Quantized object | Main benefit | Main numerical risk | System dependency |
-| --- | --- | --- | --- |
-| Weights | fit and lower weight traffic | dequantization error | matrix-kernel support |
-| Activations | lower intermediate traffic | outlier range | calibration and accumulation |
-| KV state | more active context | attention drift over length | attention-backend support |
-| Logits or sampler | smaller final operations | changed token probabilities | output contract |
-
-## Values, ranges, and scales
-
-Floating-point formats divide their bits among sign, exponent, and significand.
-Integer quantization usually maps a range of real values onto a small set of
-integers using a scale and sometimes a zero point. A scale says how wide each
-integer step is; a zero point says where the real value zero lands inside the
-integer range. Symmetric schemes skip the zero point and spend everything on
-step width.
 
 One scale for an entire tensor is cheap but must cover outliers. Per-channel or
 per-group scales adapt to smaller regions and preserve more detail, at the cost
@@ -120,6 +85,29 @@ is wrong by 0.034, about eleven percent of its value. Every weight in the group
 carries up to half a step of rounding error, and the tighter the group's range,
 the smaller the step and the error — which is the entire argument for groups.
 
+**A quantized multiply is a real multiply plus a scale, a round, and a wider
+accumulator.**
+
+```blockdiag
+flowchart LR
+    R["Real weights (BF16)"] --> G{"Pick one scale per group"}
+    G --> I["Store integers (4/8 bit)"]
+    G --> S["Store scales (FP16)"]
+    I --> K["Kernel loads both"]
+    S --> K
+    K --> DQ["Dequantize: w ≈ scale × int"]
+    DQ --> ACC["Accumulate in wide type"]
+    R -.->|"rounding loses outlier detail"| I
+```
+
+| Quantized object | Main benefit | Main numerical risk | System dependency |
+| --- | --- | --- | --- |
+| Weights | fit and lower weight traffic | dequantization error | matrix-kernel support |
+| Activations | lower intermediate traffic | outlier range | calibration and accumulation |
+| KV state | more active context | attention drift over length | attention-backend support |
+| Logits or sampler | smaller final operations | changed token probabilities | output contract |
+
+
 Two properties of that error matter downstream. First, it does not wash out in
 the dot product: rounding errors across a 128-weight accumulation behave like
 independent noise, adding in quadrature alongside the signal, so a longer
@@ -152,7 +140,7 @@ fixed bit width, and both inherit the distribution-shift risk described
 above: their statistics describe the calibration set, not the model. The
 practical interview-grade summary: at 8 bits the families converge and the
 format choice dominates; at 4 bits the family choice is worth more than the
-group-size dial, and the honest evaluation is Chapter 22's — same trace,
+group-size dial, and the honest evaluation is Chapter 23's — same trace,
 same quality gates, differences classified before conclusions.
 
 ## What can be quantized?
@@ -355,6 +343,22 @@ attention backend can change rounding. Two close candidates may swap order —
 and a swap at the top of the distribution is a different response, not a
 slightly different one.
 
+**Reproducibility is an execution contract, not a sampler setting.**
+
+```blockdiag
+flowchart LR
+    R["Same request and seed"] --> A["Batch shape A"]
+    R --> B["Batch shape B"]
+    A --> RA["Reduction order A"]
+    B --> RB["Reduction order B"]
+    RA --> L["Logits"]
+    RB --> L
+    L --> C{"Required contract"}
+    C -->|Strict| T["Exact tokens"]
+    C -->|Analytical| P["Stable probabilities"]
+    C -->|Product| E["Task-level equivalence"]
+```
+
 A two-number walk shows how little it takes. Suppose the top two logits are
 10.32 and 10.28 under the baseline engine. A different reduction order nudges
 them to 10.29 and 10.30; greedy decoding now emits the other token, and every
@@ -376,10 +380,41 @@ A/B tests and evaluation pipelines have their own stake: an evaluation that
 cannot reproduce itself across batch shapes measures the scheduler as much as
 the model.
 
+A seeded sampler controls one source of variation; it does not make the
+execution path deterministic. Batch-invariant service also needs operators
+whose results do not depend on batch composition, deterministic collective and
+attention implementations, and a stable mapping from requests to random-number
+streams. The official
+[vLLM batch-invariance guide](https://docs.vllm.ai/en/latest/features/batch_invariance/)
+documents the required execution controls, while
+[SGLang's deterministic-inference guide](https://docs.sglang.ai/advanced_features/deterministic_inference.html)
+shows why kernel and scheduling choices are part of the contract.
+
+Test the contract as a matrix rather than as one repeated command: run the same
+requests alone and in changing batch shapes, with graph replay on and off,
+across supported attention backends, and across the intended parallel layout.
+Record exact-token equality, maximum log-probability drift, and task-level
+equivalence separately. A product that needs only the last measure should not
+pay the full throughput cost of the first; an evaluator that compares small
+logit changes cannot quietly settle for the last.
+
 ## Run a four-axis evaluation
 
 Choose two candidate quantization strategies and one unquantized baseline.
 Evaluate them on:
+
+**A deployable format must pass both a systems gate and a quality gate.**
+
+```blockdiag
+flowchart TB
+    F["Candidate format"] --> M{"Fits memory and has target kernels?"}
+    M -->|No| R["Reject for this platform"]
+    M -->|Yes| P["Measure workload performance"]
+    P --> Q{"Passes product quality and stability?"}
+    Q -->|No| R
+    Q -->|Yes| D["Deploy for the qualifying tier"]
+```
+
 
 1. memory: weights, cache capacity, workspaces, and peak allocation;
 2. performance: TTFT, ITL, throughput, and goodput over several batch shapes;
@@ -436,6 +471,3 @@ drift.
 Choose a format for interactive and long-document tiers separately, and name
 the constraint that justifies each choice. Compare your reasoning with
 [Appendix G](../appendices/g-worked-solutions.md#10-quantization-decision).
-
-Chapter 11 turns to another way of reducing decode time: predicting several
-future tokens and checking them together.

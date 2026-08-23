@@ -18,45 +18,6 @@ all of them appear in production incidents.
 Hardware is not a bag of processors. It is a map of places where bytes can live
 and paths along which bytes can move.
 
-## Visual map
-
-**Every byte follows a physical path, even when the API hides it.**
-
-```blockdiag
-flowchart LR
-    R["GPU registers and SRAM"] --> H["Device HBM"]
-    H --> P["PCIe or local GPU fabric"]
-    P --> M["Host memory and NUMA socket"]
-    M --> N["NIC and network fabric"]
-    N --> S["Remote memory or storage"]
-```
-
-**The roofline question chooses the first optimization direction.**
-
-```blockdiag
-flowchart TB
-    O["Measure operation and byte traffic"] --> I["Compute arithmetic intensity"]
-    I --> X{"Below compute-to-bandwidth crossover?"}
-    X -->|Yes| B["Reduce bytes or improve locality"]
-    X -->|No| C["Reduce arithmetic or use faster compute"]
-    B --> V["Verify end-to-end bottleneck"]
-    C --> V
-```
-
-The first diagram is a cost ladder: each hop outward buys capacity with
-latency and bandwidth, and the optimizer's job is to keep hot objects on the
-lowest rung their access pattern justifies. The second diagram is a triage
-procedure, not a description of the machine — it produces a hypothesis about
-which resource governs, and the final node insists that measurement confirm
-or falsify it before anyone optimizes.
-
-| Boundary | First question | Evidence |
-| --- | --- | --- |
-| HBM | are weights or KV reread? | achieved bandwidth and cache traffic |
-| GPU fabric | which collective dominates? | bytes, latency, overlap, stragglers |
-| PCIe and NUMA | is the copy staged or remote? | affinity and transfer timeline |
-| Network | is payload or setup dominant? | message-size throughput curve |
-
 ## Four limits to keep separate
 
 Hardware discussions often collapse everything into “speed.” In practice, four
@@ -103,6 +64,33 @@ discipline exists largely to tell them apart.
 
 Arithmetic intensity measures how much computation an operation performs for
 each byte it moves from a chosen memory tier:
+
+**The roofline question chooses the first optimization direction.**
+
+```blockdiag
+flowchart TB
+    O["Measure operation and byte traffic"] --> I["Compute arithmetic intensity"]
+    I --> X{"Below compute-to-bandwidth crossover?"}
+    X -->|Yes| B["Reduce bytes or improve locality"]
+    X -->|No| C["Reduce arithmetic or use faster compute"]
+    B --> V["Verify end-to-end bottleneck"]
+    C --> V
+```
+
+The first diagram is a cost ladder: each hop outward buys capacity with
+latency and bandwidth, and the optimizer's job is to keep hot objects on the
+lowest rung their access pattern justifies. The second diagram is a triage
+procedure, not a description of the machine — it produces a hypothesis about
+which resource governs, and the final node insists that measurement confirm
+or falsify it before anyone optimizes.
+
+| Boundary | First question | Evidence |
+| --- | --- | --- |
+| HBM | are weights or KV reread? | achieved bandwidth and cache traffic |
+| GPU fabric | which collective dominates? | bytes, latency, overlap, stragglers |
+| PCIe and NUMA | is the copy staged or remote? | affinity and transfer timeline |
+| Network | is payload or setup dominant? | message-size throughput curve |
+
 
 ```text
 arithmetic intensity = operations / bytes transferred
@@ -169,7 +157,7 @@ the arithmetic to set expectations *before* benchmarking: if a planned
 configuration implies 60 percent decode MFU at batch 4, the plan contradicts
 arithmetic, not tuning. Chapter 8 returns to the tile level — where tensor
 cores consume whole rectangles of data and explain why the crossover exists —
-and Chapter 22 turns these ceilings into full capacity estimates.
+and Chapter 23 turns these ceilings into full capacity estimates.
 
 Prefill tells the opposite story. A 1,000-token prompt performs a thousand
 positions' arithmetic per weight read, putting its intensity near a thousand —
@@ -184,7 +172,7 @@ Below it, the winning moves reduce bytes or improve reuse: paged allocation
 intensity directly. Above it, bytes are no longer the constraint, so the
 winning moves cut arithmetic or overlap it: speculative decoding (Chapter 11)
 spends extra arithmetic to shorten the critical path, and disaggregation
-(Chapter 14) moves work to where its limiting resource is plentiful. When a
+(Chapter 15) moves work to where its limiting resource is plentiful. When a
 profiler says a kernel sits below the crossover, that ordering tells you
 which chapter to open first.
 
@@ -218,6 +206,18 @@ An inference deployment may use a hierarchy that begins with registers and
 on-chip scratch memory, continues through device caches and high-bandwidth
 memory, and extends to host memory, local storage, remote storage, and durable
 object storage.
+
+**Every byte follows a physical path, even when the API hides it.**
+
+```blockdiag
+flowchart LR
+    R["GPU registers and SRAM"] --> H["Device HBM"]
+    H --> P["PCIe or local GPU fabric"]
+    P --> M["Host memory and NUMA socket"]
+    M --> N["NIC and network fabric"]
+    N --> S["Remote memory or storage"]
+```
+
 
 Closer tiers are scarce and fast. Farther tiers provide more capacity at higher
 access cost. Different objects deserve different treatment. Model weights are
@@ -290,7 +290,7 @@ order of thirteen milliseconds to pull back from host memory. A preempted
 sequence whose state was swapped to the host does not resume for free; it
 replays a ten-millisecond-scale penalty into some unlucky request's
 inter-token latency — a visible bite out of a 150-millisecond budget. That is
-why preemption policy (Chapter 6) and KV transfer design (Chapter 14) treat
+why preemption policy (Chapter 6) and KV transfer design (Chapter 15) treat
 tier placement as a latency decision, not a storage detail.
 
 ## Links decide which parallel plans make sense

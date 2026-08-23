@@ -18,46 +18,6 @@ hiding inside "how long did it take," percentiles and how to combine them,
 capacity as distinct from throughput, goodput as the SLO-qualified rate, and
 the workload description that all of it depends on.
 
-## Visual map
-
-**Goodput filters completed work through the product contract.**
-
-```blockdiag
-flowchart LR
-    A["Arrivals"] --> B["Queue"]
-    B --> C["Inference service"]
-    C --> D["Completed requests"]
-    D --> E{"Meets latency, quality, and correctness SLO?"}
-    E -->|Yes| F["Goodput"]
-    E -->|No| G["Completed but non-qualifying work"]
-```
-
-**The load generator changes what overload looks like.**
-
-```blockdiag
-flowchart TB
-    O["Open-loop source"] -->|independent arrivals| S1["Server"]
-    S1 --> Q["Queue can grow"]
-    C["Closed-loop clients"] --> S2["Server"]
-    S2 --> R["Responses"]
-    R -->|permit next request| C
-```
-
-The first diagram is a filter, not a pipeline: completed work leaves the
-service either way, and only the contract decides what counted. The second
-diagram shows why the same server can produce two different overload stories.
-An open-loop source keeps sending at its own rhythm while queues grow; a
-closed-loop client cannot send its next request until the last one returns,
-so rising latency silently throttles the load. Every measurement later in
-this chapter is shaped by which of those two worlds produced it.
-
-| Measure | Unit of observation | What it can hide |
-| --- | --- | --- |
-| TTFT | request | later stream stalls |
-| ITL | token gap | initial queue and prefill |
-| throughput | completed work per second | SLO failures and queue growth |
-| goodput | qualifying work per second | reasons individual requests failed |
-
 ## Decide what counts as work
 
 A text-generation service handles several nested units. A session contains
@@ -80,7 +40,7 @@ but not to the user; a service that counts attempts reports higher volume
 precisely when it is failing more often. The same accounting question
 survives into goodput: if both attempts complete but only within-SLO attempts
 qualify, the definition must say whether the retry's cost lands in the
-denominator. Chapter 21 treats retry identity as an API contract for exactly
+denominator. Chapter 22 treats retry identity as an API contract for exactly
 this reason — the metric story and the correctness story are the same story.
 
 A useful metric always names its unit. For example:
@@ -249,6 +209,19 @@ Throughput measures completed work per unit time. Capacity is the arrival rate
 the service can sustain while meeting its contract. The two diverge near
 overload.
 
+**Goodput filters completed work through the product contract.**
+
+```blockdiag
+flowchart LR
+    A["Arrivals"] --> B["Queue"]
+    B --> C["Inference service"]
+    C --> D["Completed requests"]
+    D --> E{"Meets latency, quality, and correctness SLO?"}
+    E -->|Yes| F["Goodput"]
+    E -->|No| G["Completed but non-qualifying work"]
+```
+
+
 Imagine a server completing 100 requests per second while 120 arrive. Its
 throughput looks stable, but the queue grows by 20 requests every second.
 Latency will continue rising until callers time out or the system fails.
@@ -347,6 +320,33 @@ behavior hides overload from unwary benchmarks. Consider a fixed population of
 rearranged, the offered rate is `Q / W` with `Q` fixed at 40: if a round trip
 averages `W = 0.5` seconds, clients collectively offer 80 requests per second.
 
+**The load generator changes what overload looks like.**
+
+```blockdiag
+flowchart TB
+    O["Open-loop source"] -->|independent arrivals| S1["Server"]
+    S1 --> Q["Queue can grow"]
+    C["Closed-loop clients"] --> S2["Server"]
+    S2 --> R["Responses"]
+    R -->|permit next request| C
+```
+
+The first diagram is a filter, not a pipeline: completed work leaves the
+service either way, and only the contract decides what counted. The second
+diagram shows why the same server can produce two different overload stories.
+An open-loop source keeps sending at its own rhythm while queues grow; a
+closed-loop client cannot send its next request until the last one returns,
+so rising latency silently throttles the load. Every measurement later in
+this chapter is shaped by which of those two worlds produced it.
+
+| Measure | Unit of observation | What it can hide |
+| --- | --- | --- |
+| TTFT | request | later stream stalls |
+| ITL | token gap | initial queue and prefill |
+| throughput | completed work per second | SLO failures and queue growth |
+| goodput | qualifying work per second | reasons individual requests failed |
+
+
 Now suppose the server degrades until `W` rises to 2 seconds. The client
 population has not changed, yet offered load falls to 20 requests per second.
 Queues drain, the server stabilizes, and measured latency settles at a value
@@ -386,7 +386,7 @@ A workload record should also be replayable: timestamps, lengths, modality,
 tenant, and prefix identifiers in a form a load generator can consume
 directly. Replaying the same record against two engine revisions turns "the
 new version feels faster" into a controlled comparison, and replaying a
-recorded incident reproduces the arrival pattern that caused it. Chapter 22
+recorded incident reproduces the arrival pattern that caused it. Chapter 23
 builds its benchmarking discipline on exactly this foundation — without a
 replayable description of the work, every performance claim is an anecdote.
 
@@ -409,6 +409,41 @@ offered load automatically when latency rises.
 
 Neither style is universally correct. The mistake is failing to say which one
 produced the result.
+
+## Online, offline, and pipeline-driven work
+
+**Arrival semantics change the optimization target even when the model and
+token counts are identical.**
+
+```blockdiag
+flowchart LR
+    O["Online callers"] -->|"independent deadlines"| S["Shared inference capacity"]
+    B["Offline dataset"] -->|"completion deadline"| S
+    P["Pipeline stage"] -->|"backpressure from consumer"| S
+    S --> I["Interactive goodput"]
+    S --> D["Dataset completion time"]
+    S --> F["Pipeline freshness"]
+```
+
+An **online** service receives independently timed requests and is judged by
+per-request latency and availability. An **offline** job owns a finite dataset
+and usually trades individual latency for total completion time, accelerator
+occupancy, and restartability. A **pipeline-driven** service—an embedding stage
+feeding retrieval, or a rollout fleet feeding a trainer—receives work at a rate
+coupled to the consumer. Backpressure and freshness are part of its contract.
+
+| Workload mode | Primary clock | Natural unit | Overload symptom |
+| --- | --- | --- | --- |
+| online | request deadline | qualifying request or session | queue age and rejection |
+| offline or batch | job deadline | completed dataset shard | missed completion window |
+| pipeline-driven | downstream consumption | useful item delivered to next stage | growing lag or stale policy |
+
+Batch inference is not simply online inference with a large concurrency value.
+It can reorder examples, checkpoint progress, group shapes aggressively, and
+retry failed shards without preserving a user-visible stream. Conversely, a
+pipeline cannot maximize batch size blindly when doing so starves its consumer.
+Record workload mode alongside lengths and arrival distributions so later
+chapters optimize the correct clock.
 
 ## Start from the product
 
@@ -507,6 +542,3 @@ Report queue time, TTFT, worst per-request ITL, end-to-end latency, prefix
 matches, errors, throughput, and the SLO-qualified goodput defined above.
 Explain why equal token totals do not imply equal capacity. See the worked
 construction in [Appendix G](../appendices/g-worked-solutions.md#2-workload-traces-and-goodput).
-
-Now that the goals are clear, the next chapter looks inside the model to find
-the computation and state that the server must schedule.

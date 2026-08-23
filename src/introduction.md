@@ -71,12 +71,14 @@ opens a single engine and follows its scheduler, KV cache, kernels, compiled
 graphs, numerical formats, decoding algorithms, and multi-tenant adapter
 serving. Part III asks what changes when state and computation cross
 accelerator or host boundaries. Part IV extends the model to images, audio,
-video, and reinforcement learning. Part V turns the mechanisms into an API,
-benchmark, debugging method, operating practice, and economic decision.
+video, reinforcement learning, interactive reasoning, and agentic waits. Part V
+turns the mechanisms into API contracts, benchmark evidence, operating
+practice, economic decisions, and security boundaries.
 
 The appendices provide notation, hardware references and portability guides,
 benchmark templates, deployment patterns, decision checklists, terminology,
-source provenance, worked solutions, and a phased optimization migration guide.
+source provenance, worked solutions, a phased optimization migration guide,
+and a production debugging playbook.
 
 Each chapter begins from a problem rather than a catalog of features. Most end
 with an experiment or design exercise. Read the explanations first; return to
@@ -86,6 +88,3 @@ the idea.
 If you are running an inference service today and need to solve a specific
 problem, the [How to Read](how-to-read.md) page includes a problem-oriented
 navigation table.
-
-The first task is to define success. Chapter 1 begins with a service that looks
-fast on a dashboard and still disappoints its users.

@@ -1,4 +1,4 @@
-# 7. Memory Management and the KV Cache
+# 7. Memory Management and Local Model State
 
 Suppose a chat request has a maximum context length of 64,000 tokens. Reserving
 a contiguous KV-cache region for all 64,000 positions would make growth easy,
@@ -19,7 +19,12 @@ eviction under live readers — has a direct ancestor in operating-system memory
 management, which is useful because fifty years of OS practice tells you where
 the bodies are buried.
 
-## Visual map
+## Logical tokens, physical blocks
+
+Consider a block that holds 16 token positions. A 35-token sequence needs three
+blocks. The first two are full and the last uses only three positions. When the
+sequence grows, the allocator can attach another free block anywhere in the
+cache.
 
 **A block table separates logical sequence order from physical placement.**
 
@@ -33,39 +38,6 @@ flowchart LR
     P1 --> K
 ```
 
-**Reusable blocks move through ownership states before returning to the pool.**
-
-```blockdiag
-flowchart LR
-    F["Free"] -->|allocate| W["Private and writable"]
-    W -->|GPU complete| S["Sealed"]
-    S -->|publish| R["Reusable and referenced"]
-    R -->|evict index| D["Draining"]
-    D -->|reference count zero| F
-```
-
-The first diagram is the indirection that makes everything else possible:
-logical order is a fiction the kernel resolves through the table, so growth,
-sharing, and release never require moving bytes. The second diagram is the
-discipline that keeps the fiction honest — a block becomes visible to others
-only after its writer is provably finished, and leaves the pool only after its
-last reader is provably gone. The table below names the four moments where
-that discipline is most often violated, and what each violation looks like
-from outside.
-
-| Cache concern | Identity or invariant | Observable signal |
-| --- | --- | --- |
-| legal reuse | tokens, positions, weights, adapter, format | matched tokens by namespace |
-| branching | sealed blocks shared; tail copied | copy-on-write count |
-| cancellation | in-flight blocks remain pinned | deferred-release age |
-| eviction | visibility removed before storage | references after index removal |
-
-## Logical tokens, physical blocks
-
-Consider a block that holds 16 token positions. A 35-token sequence needs three
-blocks. The first two are full and the last uses only three positions. When the
-sequence grows, the allocator can attach another free block anywhere in the
-cache.
 
 ```text
 logical positions:  [0 ........ 15][16 ....... 31][32 .. 34]
@@ -126,7 +98,7 @@ size is part of an execution plan, not a universal constant.
 The interactions run wider than allocation. Chapter 6's prefill chunking
 interacts with block size because a chunk that stops mid-block leaves a
 partially filled block whose publication timing the lifecycle rules govern;
-Chapter 14's cross-node transfers price block size directly, since the
+Chapter 15's cross-node transfers price block size directly, since the
 transfer unit determines how much protocol overhead repeats per hop. When a
 team changes block size, it is quietly renegotiating with the scheduler, the
 kernel, and the transfer layer simultaneously — which is why the setting
@@ -150,6 +122,34 @@ exist to pin down.
 Allocation is not merely “free” or “used.” A block can be allocated while a
 step is about to write it, valid and owned by a running request, valid but kept
 only for reuse, or waiting for an asynchronous transfer to finish.
+
+**Reusable blocks move through ownership states before returning to the pool.**
+
+```blockdiag
+flowchart LR
+    F["Free"] -->|allocate| W["Private and writable"]
+    W -->|GPU complete| S["Sealed"]
+    S -->|publish| R["Reusable and referenced"]
+    R -->|evict index| D["Draining"]
+    D -->|reference count zero| F
+```
+
+The first diagram is the indirection that makes everything else possible:
+logical order is a fiction the kernel resolves through the table, so growth,
+sharing, and release never require moving bytes. The second diagram is the
+discipline that keeps the fiction honest — a block becomes visible to others
+only after its writer is provably finished, and leaves the pool only after its
+last reader is provably gone. The table below names the four moments where
+that discipline is most often violated, and what each violation looks like
+from outside.
+
+| Cache concern | Identity or invariant | Observable signal |
+| --- | --- | --- |
+| legal reuse | tokens, positions, weights, adapter, format | matched tokens by namespace |
+| branching | sealed blocks shared; tail copied | copy-on-write count |
+| cancellation | in-flight blocks remain pinned | deferred-release age |
+| eviction | visibility removed before storage | references after index removal |
+
 
 ```text
 free -> reserved -> being written -> valid and owned
@@ -195,7 +195,7 @@ keeping the block. They trade correctness structure for capacity — a dropped
 token changes attention outputs for everything after it, so unlike block
 eviction under prefix identity, the result is no longer equivalent to a
 cache miss. Fine for lossy compression deployments that accept it; wrong for
-anything that promised Chapter 21-style output equivalence. Second, eviction
+anything that promised Chapter 22-style output equivalence. Second, eviction
 under adapters must consider the adapter dimension too: a block reused under
 a different adapter is not a hit at all, which is the subject of the next
 section.
@@ -208,7 +208,7 @@ carries two matrices of `8192 × 16` BF16 values, `2 × 8192 × 16 × 2 = 512 Ki
 per layer, about 40 MiB across 80 layers — four orders of magnitude smaller
 than the 140 GB base model. That ratio is the whole economics of adapter-dense
 serving: a fleet can hold thousands of adapters resident for the cost of one
-extra base replica, and Chapter 16's 800 ms cold-adapter load is not I/O wait
+extra base replica, and Chapter 17's 800 ms cold-adapter load is not I/O wait
 but the price of not having the weights paged where the batch needs them.
 
 The serving designs follow from the arithmetic. Because an adapter's working
@@ -222,7 +222,7 @@ sized per batch composition, the block table must carry which adapter each
 sequence runs under so a mixed step never mixes identities, and CUDA-graph
 capture (Chapter 9) must either fix the adapter set per graph or read
 pointers dynamically — a captured graph with baked adapter weights silently
-serves the wrong model, the same failure class as Chapter 19's stale-weight
+serves the wrong model, the same failure class as Chapter 20's stale-weight
 caches. When an interviewer asks how one replica can serve a thousand
 customer-specific models, the answer is this section: adapters make weights
 a per-request cache problem, and everything from Chapter 7 applies with
@@ -482,7 +482,7 @@ Step 6: Set max-num-seqs to 85% of Step 5
 
 The 85% margin prevents preemption storms. If your actual traffic has
 variable context lengths, use your p90 context length in Step 5. The
-decision checklist in Appendix D2 walks this calculation with additional
+decision checklist in Appendix D walks this calculation with additional
 considerations for adapters, speculative decoding, and quantized KV.
 
 ## Practice: construct a cache safety matrix
@@ -495,6 +495,3 @@ Then test cancellation during a write, branching from a partial block, and
 eviction with a live reader. Assert unpublished-state isolation, copy-on-write,
 eventual reference release, and output equivalence with caching disabled. The
 worked matrix is in [Appendix G](../appendices/g-worked-solutions.md#7-kv-cache-correctness-matrix).
-
-With memory organized, the engine can present irregular batches to the GPU.
-Chapter 8 looks at the kernels that turn those mappings into useful work.

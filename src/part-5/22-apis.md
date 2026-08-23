@@ -1,4 +1,4 @@
-# 21. APIs as Correctness Boundaries
+# 22. APIs, Streaming, and Structured Generation
 
 An engine can generate the right token and still return the wrong response.
 
@@ -16,7 +16,14 @@ The API is the boundary where a changing engine promises stable behavior to
 its callers. Everything behind it may be rewritten every week; the boundary may
 not move without a version.
 
-## Visual map
+## An endpoint is more than a URL
+
+A production server may expose chat, text completion, embedding, scoring,
+classification, reranking, image, audio, or real-time endpoints. Each endpoint
+defines accepted inputs, defaults, limits, output fields, streaming events, and
+error behavior — and each of those definitions is load-bearing. A default
+maximum output length changes what "the model said" means; a silent truncation
+changes it again.
 
 **The API translates a public contract into engine work and back again.**
 
@@ -31,47 +38,17 @@ flowchart LR
     P --> C
 ```
 
-**A streamed request remains a state machine after the connection changes.**
-
-```blockdiag
-flowchart LR
-    Q["Queued"] --> R["Running"]
-    R --> S["Streaming"]
-    S --> F["Finished"]
-    Q --> C["Cancelling"]
-    R --> C
-    S --> C
-    C --> D["Device work drained"]
-    D --> X["State released"]
-```
-
-| Contract surface | Must specify | Dangerous ambiguity |
-| --- | --- | --- |
-| tokenization | model, template, truncation | same text becomes different tokens |
-| streaming | event order and finish semantics | partial output mistaken for completion |
-| cancellation | terminal event and cleanup | disconnected work keeps capacity |
-| retries | request and tool idempotency | duplicated external action |
-| structured output | schema and refusal behavior | syntactically valid but unsafe action |
-
-## An endpoint is more than a URL
-
-A production server may expose chat, text completion, embedding, scoring,
-classification, reranking, image, audio, or real-time endpoints. Each endpoint
-defines accepted inputs, defaults, limits, output fields, streaming events, and
-error behavior — and each of those definitions is load-bearing. A default
-maximum output length changes what "the model said" means; a silent truncation
-changes it again.
 
 Protocol compatibility should be stated at that level. Two servers can both
 accept a familiar chat request while differing on unsupported parameters
 (ignored? rejected? echoed?), tool-call deltas, usage events, whether
 stop-token text appears in the returned content, or error codes. Test the
 semantics your client uses instead of relying on a compatibility label —
-Chapter 22's benchmark discipline applies to conformance just as much as to
+Chapter 23's benchmark discipline applies to conformance just as much as to
 speed.
 
 Version behavior that affects output. A new parser or chat template can change
-responses as materially as new weights, which is why Chapter 17 treated
+responses as materially as new weights, which is why Chapter 18 treated
 processor version as execution identity and this chapter treats template and
 parser revisions as part of the served artifact's name.
 
@@ -79,7 +56,7 @@ Errors deserve the same specification effort as successes. A useful taxonomy
 separates at least four classes with distinct client obligations: malformed
 request (fix the request), limit exceeded (shed load or raise quota — see the
 limit pricing below), capacity unavailable (retry with backoff, ideally
-elsewhere per Chapter 16's routing), and internal failure (retry only if
+elsewhere per Chapter 17's routing), and internal failure (retry only if
 idempotent). Collapsing them into one 500-with-a-string forces every client to
 reimplement the classification, badly and independently.
 
@@ -108,7 +85,7 @@ the tokenizer merges or splits characters differently across revisions; a
 template rewrites the surrounding text. The API should say which form is
 authoritative, whether matched stop text is included in or excluded from the
 returned content, and how `max_tokens` truncation reports itself distinctly
-from a clean stop — Chapter 22's benchmark harness depends on that
+from a clean stop — Chapter 23's benchmark harness depends on that
 distinction, since a length-truncated run is not a completed sample.
 
 ## Streaming is a state machine
@@ -116,6 +93,29 @@ distinction, since a length-truncated run is not a completed sample.
 A stream is not a series of unrelated JSON objects. It has a beginning, ordered
 deltas, optional tool or reasoning channels, a finish reason, usage, and a
 terminal event.
+
+**A streamed request remains a state machine after the connection changes.**
+
+```blockdiag
+flowchart LR
+    Q["Queued"] --> R["Running"]
+    R --> S["Streaming"]
+    S --> F["Finished"]
+    Q --> C["Cancelling"]
+    R --> C
+    S --> C
+    C --> D["Device work drained"]
+    D --> X["State released"]
+```
+
+| Contract surface | Must specify | Dangerous ambiguity |
+| --- | --- | --- |
+| tokenization | model, template, truncation | same text becomes different tokens |
+| streaming | event order and finish semantics | partial output mistaken for completion |
+| cancellation | terminal event and cleanup | disconnected work keeps capacity |
+| retries | request and tool idempotency | duplicated external action |
+| structured output | schema and refusal behavior | syntactically valid but unsafe action |
+
 
 The server should define whether usage appears only at the end, whether a tool
 call's name can stream separately from its arguments, and how partial UTF-8 or
@@ -161,7 +161,7 @@ The last clause needs enforcement, not convention. Suppose the client
 disconnects at *t* and the worker finishes its in-flight model step at
 *t* + 40 ms, emitting the final chunk to a connection that no longer exists.
 The correct behavior is to drop the chunk at the connection writer, and the
-mechanism is the generation fence from Chapter 20, narrowed to one request:
+mechanism is the generation fence from Chapter 21, narrowed to one request:
 every output event carries its attempt's generation; the terminal event closes
 that generation; any later event bearing it is stale and discarded. Without
 the fence, a client that retried after the disconnect receives interleaved
@@ -198,6 +198,25 @@ the backend and grammar version — two backends compile the same JSON Schema
 into different token machines, and a cache hit across them silently serves one
 product's grammar under another's name.
 
+**Grammar state advances beside model state on every sampled token.**
+
+```blockdiag
+flowchart LR
+    L["Model logits"] --> M["Grammar or schema mask"]
+    P["Parser state"] --> M
+    M --> S["Sample legal token"]
+    S --> U["Update parser state"]
+    U --> P
+    S --> O["Ordered output stream"]
+```
+
+A 128k-token vocabulary needs 128k legality bits per position: 16 KiB as a
+packed mask. At batch 64 with three speculative positions plus the bonus
+token, four rows per request require about 4 MiB of masks per engine step.
+That is small beside model traffic but not free, especially because host-side
+parser state must produce it before sampling. Schema complexity therefore
+belongs in both admission limits and performance measurements.
+
 Tool and reasoning parsers interpret model-specific token conventions. They are
 streaming parsers because a complete object may arrive over many tokens. Parser
 state belongs to one request and must be updated in the same order as output
@@ -213,6 +232,21 @@ SGLang implements compatible endpoints and parser paths under
 and its constrained-decoding package.
 
 These are fast-moving interfaces. Pin behavior with protocol tests.
+
+### Constraints at speculative positions
+
+Speculation gives every proposed position a provisional parser state. A token
+forbidden at position two cannot be accepted merely because positions zero and
+one were legal; verification commits both model and grammar state only through
+the accepted prefix and rolls both back at the first rejection.
+
+At the pinned vLLM snapshot, `StructuredOutputManager` sizes its bitmask tensor
+for `max_batch_size * (1 + max_num_spec_tokens)` rows—one legality row per
+speculative position plus the bonus token. The implementation lives under
+[`vllm/v1/structured_output`](https://github.com/vllm-project/vllm/tree/5cecfc01375052698823fc401e31518fb32a981e/vllm/v1/structured_output).
+The design rule is framework-independent: ordinary and speculative decoding
+must consult the same constraint machine, and a benchmark must use the schemas
+that production traffic actually carries.
 
 ### Which constraint, and what happens when it cannot exist
 
@@ -232,7 +266,7 @@ The same missing capability produces two different outcomes, and both are
 correct, because the question is whether any caller's contract depends on the
 constraint. Strict thinking means token filtering applies *inside* reasoning
 spans; silently dropping it changes emitted behavior for callers who opted in,
-so it fails closed at startup — the same philosophy as Chapter 19's guard
+so it fails closed at startup — the same philosophy as Chapter 20's guard
 list, where an unsafe combination refuses to boot rather than misbehaving
 later. Optional schema support degrades with a log line instead, because no
 request promised it. The API-layer translation: report which constraints a
@@ -243,7 +277,7 @@ One more piece of machinery earns mention. Batched mask fills want a
 preallocated vocab-sized mask tensor, and `register_vocab_mask_buffer`
 validates any re-registration against the existing buffer's shape, dtype, and
 device — a mismatch raises rather than quietly swapping the tensor every
-sampler reads from. Like Chapter 19's weight-cache guards, it is a
+sampler reads from. Like Chapter 20's weight-cache guards, it is a
 startup-determined, rank-uniform check: either every rank agrees on the
 buffer or the process fails loudly, never a mixture.
 
@@ -281,7 +315,7 @@ grammar instead of inventing a dead-end mid-generation.
 
 A client deadline should propagate through the router and engine. Work that
 cannot produce a useful result before the deadline should stop consuming
-capacity — Chapter 16's admission veto applied continuously rather than once.
+capacity — Chapter 17's admission veto applied continuously rather than once.
 The server may distinguish client cancellation from its own overload or
 internal timeout because callers respond differently: a cancelled request
 should not be retried by infrastructure, an overloaded one maybe should.
@@ -294,7 +328,7 @@ walk), then `prefill_ms(2000) = 20 + 70 = 90 ms`, then one decode step of
 45 ms before the first byte — 285 ms, under the deadline by 15 ms. Now the
 queue runs long and the same request faces 180 ms of waiting: first byte at
 315 ms. The prediction error lives entirely in the queue term; prefill and
-decode costs are stable, which is why Chapter 16 scored placements as queue
+decode costs are stable, which is why Chapter 17 scored placements as queue
 plus known costs.
 
 Two designs handle the drift. Admit-anyway-then-cancel: the server accepts,
@@ -310,7 +344,7 @@ at admission.
 Cancellation granularity follows from engine structure rather than API
 preference. A cancel arriving mid-model-step cannot un-commit the step; the
 bound is one engine step of wasted work (Chapter 5's step structure, the same
-bound Chapter 20 accepted for interruption). Promising "instant" cancellation
+bound Chapter 21 accepted for interruption). Promising "instant" cancellation
 in the API would be promising something the executor cannot deliver — the
 contract should say "stops within one engine step," which is testable.
 
@@ -322,7 +356,7 @@ have already charged a card or sent a message.
 Separate generation from external action. Give tool executions their own
 idempotency keys and authorization checks. Never treat model output as trusted
 instructions merely because it matches a schema — validity is syntax, and
-Chapter 23's security discussion owns what validity does not cover.
+Chapter 26's security discussion owns what validity does not cover.
 
 The duplicate-ID contract deserves its exact terms, since it is the kind of
 clause teams discover they need only after double-charging a customer. For the
@@ -374,7 +408,7 @@ request that will never fit.
 
 Avoid exposing administrative engine APIs—weight updates, sleep, arbitrary
 collective calls, cache control, or profiling—on the public inference network.
-They can change model behavior or deny service. Chapter 19 made weight updates
+They can change model behavior or deny service. Chapter 20 made weight updates
 transactions; making them internet-reachable undoes that care with one routing
 mistake. Separate credentials and network boundaries are appropriate.
 
@@ -420,7 +454,4 @@ ID, and retry after completion.
 Assert semantic output, event ordering, bounded backpressure, and eventual GPU
 state release. Classify engine-version differences instead of checking only
 HTTP status. The worked contract is in
-[Appendix G](../appendices/g-worked-solutions.md#21-protocol-conformance).
-
-The suite lets the engine change internally without moving the correctness
-boundary. Chapter 22 applies the same discipline to performance claims.
+[Appendix G](../appendices/g-worked-solutions.md#22-protocol-conformance).

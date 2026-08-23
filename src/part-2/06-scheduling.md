@@ -19,7 +19,11 @@ at a time — batch membership, work budgets, chunking, queue policy,
 preemption, and admission — because each decision exists to protect a
 different one of those parties.
 
-## Visual map
+## Why static batches waste work
+
+In a static batch, the server groups requests and runs them together until all
+finish. This works well when inputs and outputs have similar shapes. Text
+generation is less cooperative.
 
 **Continuous batching changes membership at every engine step.**
 
@@ -34,6 +38,41 @@ flowchart LR
     F -->|Yes| O["Output and free state"]
 ```
 
+
+One sequence may stop after five tokens while another continues for 500. The
+finished sequence leaves an empty slot, but the batch remains alive for the
+long request. Padding preserves a regular tensor shape while spending compute
+and memory on positions that no user needs.
+
+The waste has a size. Take a static batch of sixteen sequences whose
+completion lengths spread evenly between 5 and 500 tokens — a declared
+assumption, but a realistic one for mixed traffic. At the moment the batch
+finally finishes, the average member stopped long ago, and average occupancy
+over the batch's life is roughly half: about half the token work the GPU
+performed was padding that no request needed. Chapter 1 walked this cost for
+a single padded step; static batching multiplies it by keeping the padding
+alive for the batch's entire remaining duration, and no scheduler setting can
+recover it because membership is frozen until the whole batch drains.
+
+Iteration-level scheduling rebuilds membership between model steps. Finished
+sequences leave and waiting sequences enter. This technique is commonly called
+**continuous batching**. The
+[Orca paper](https://www.usenix.org/conference/osdi22/presentation/yu) showed how
+iteration-level scheduling improves transformer serving.
+
+Continuous batching makes the GPU busier, but it also creates a fast control
+loop. The engine must reconsider work and memory every step. That cadence is
+the chapter's real subject: a control loop running at engine-step frequency
+has to be cheap enough to run thousands of times per second, yet complete
+enough to notice a full memory pool, a missed deadline, or a stalled expert
+before committing the next batch.
+
+## A request count is not a work budget
+
+Suppose the scheduler can admit 32 requests. That limit says little about the
+next step. Thirty-two decoders need roughly one new token each. One large
+prefill may need thousands of token positions.
+
 **A token budget forces an explicit priority between work types.**
 
 ```blockdiag
@@ -44,6 +83,35 @@ flowchart TB
     X -->|Yes| E["Execute batch"]
     X -->|No| C["Delay, preempt, or reject"]
 ```
+
+
+Schedulers therefore use a token budget in addition to a sequence limit:
+
+```text
+scheduled tokens <= token budget
+active sequences <= sequence budget
+allocated state <= available capacity
+```
+
+Multimodal and speculative execution add more budgets. The engine may limit
+encoder work, media items, draft tokens, or the number of requests using a
+particular adapter.
+
+Tokens are still an approximation. A prefill token with long-context attention
+can cost more than a decode token. An MoE token may take a different path from
+its neighbor. The budget is useful because it is cheap to compute, not because
+all tokens are equal. That cheapness is deliberate: the budget is evaluated
+every step, so it must cost far less to compute than the step it shapes. Any
+richer cost model — per-token attention cost, expert-routing estimates —
+belongs to admission or placement decisions made once per request, not to the
+per-step loop.
+
+## The long-prompt problem
+
+Return to the 12,000-token prompt. Processing it as one prefill operation may
+occupy a long engine step. Every active conversation pauses while the GPU works
+on the new prompt. Their average TPOT might remain acceptable, yet users notice
+a large gap in streaming output.
 
 **Chunking plus decode reservation, over three steps of the worked example.**
 
@@ -80,73 +148,6 @@ every step, and high-priority C joins as a decoder the moment it arrives.
 | priority and age | protects classes without starvation | unfair or permanently delayed work |
 | downstream capacity | couples distributed stages | completed prefill waits without decode |
 
-## Why static batches waste work
-
-In a static batch, the server groups requests and runs them together until all
-finish. This works well when inputs and outputs have similar shapes. Text
-generation is less cooperative.
-
-One sequence may stop after five tokens while another continues for 500. The
-finished sequence leaves an empty slot, but the batch remains alive for the
-long request. Padding preserves a regular tensor shape while spending compute
-and memory on positions that no user needs.
-
-The waste has a size. Take a static batch of sixteen sequences whose
-completion lengths spread evenly between 5 and 500 tokens — a declared
-assumption, but a realistic one for mixed traffic. At the moment the batch
-finally finishes, the average member stopped long ago, and average occupancy
-over the batch's life is roughly half: about half the token work the GPU
-performed was padding that no request needed. Chapter 1 walked this cost for
-a single padded step; static batching multiplies it by keeping the padding
-alive for the batch's entire remaining duration, and no scheduler setting can
-recover it because membership is frozen until the whole batch drains.
-
-Iteration-level scheduling rebuilds membership between model steps. Finished
-sequences leave and waiting sequences enter. This technique is commonly called
-**continuous batching**. The
-[Orca paper](https://www.usenix.org/conference/osdi22/presentation/yu) showed how
-iteration-level scheduling improves transformer serving.
-
-Continuous batching makes the GPU busier, but it also creates a fast control
-loop. The engine must reconsider work and memory every step. That cadence is
-the chapter's real subject: a control loop running at engine-step frequency
-has to be cheap enough to run thousands of times per second, yet complete
-enough to notice a full memory pool, a missed deadline, or a stalled expert
-before committing the next batch.
-
-## A request count is not a work budget
-
-Suppose the scheduler can admit 32 requests. That limit says little about the
-next step. Thirty-two decoders need roughly one new token each. One large
-prefill may need thousands of token positions.
-
-Schedulers therefore use a token budget in addition to a sequence limit:
-
-```text
-scheduled tokens <= token budget
-active sequences <= sequence budget
-allocated state <= available capacity
-```
-
-Multimodal and speculative execution add more budgets. The engine may limit
-encoder work, media items, draft tokens, or the number of requests using a
-particular adapter.
-
-Tokens are still an approximation. A prefill token with long-context attention
-can cost more than a decode token. An MoE token may take a different path from
-its neighbor. The budget is useful because it is cheap to compute, not because
-all tokens are equal. That cheapness is deliberate: the budget is evaluated
-every step, so it must cost far less to compute than the step it shapes. Any
-richer cost model — per-token attention cost, expert-routing estimates —
-belongs to admission or placement decisions made once per request, not to the
-per-step loop.
-
-## The long-prompt problem
-
-Return to the 12,000-token prompt. Processing it as one prefill operation may
-occupy a long engine step. Every active conversation pauses while the GPU works
-on the new prompt. Their average TPOT might remain acceptable, yet users notice
-a large gap in streaming output.
 
 **Chunked prefill** divides the prompt across several steps. The scheduler can
 mix a chunk with decode work, allowing existing conversations to keep moving.
@@ -418,7 +419,7 @@ with a test that fails when someone raises the limit to chase throughput.
 
 ## Common scheduling mistakes in production
 
-These are the problems Chapter 22b's debugging walkthroughs trace back to
+These are the problems Appendix I's debugging walkthroughs trace back to
 scheduling configuration most often:
 
 | Mistake | Symptom | Fix |
@@ -429,7 +430,7 @@ scheduling configuration most often:
 | No priority differentiation | Low-priority batch jobs block interactive | Use priority classes with aging to prevent starvation |
 | Admission only at the load balancer | Engine overloads despite balancer limits | Engine-side admission using live KV and queue state |
 
-Each fix has a corresponding measurement in Chapter 22's methodology.
+Each fix has a corresponding measurement in Chapter 23's methodology.
 The scheduling chapter's worked example above demonstrates the first
 three directly.
 
@@ -443,6 +444,3 @@ priority plus aging.
 Report each step's contents, TTFT, deadline-qualified goodput, preemptions, and
 memory state. State when D should be rejected. A worked schedule and scoring
 rule appear in [Appendix G](../appendices/g-worked-solutions.md#6-scheduler-simulation).
-
-The scheduler can only make safe decisions if memory has clear ownership. The
-next chapter examines the block manager and the reusable state behind it.

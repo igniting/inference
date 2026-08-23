@@ -1,4 +1,4 @@
-# 14. Disaggregated Serving
+# 15. Stage Disaggregation: Encoder, Prefill, and Decode
 
 A colocated LLM worker performs both prefill and decode. That arrangement keeps
 state local and makes one worker responsible for the whole request. It also
@@ -13,7 +13,12 @@ another. The price is a new stage in the middle — KV state must move between
 pools — and a new coupling: neither pool can be sized correctly without
 measuring the other.
 
-## Visual map
+## Why split prefill from decode?
+
+Prefill benefits from large compute-efficient operations. Decode values steady,
+low-latency steps and sufficient memory bandwidth. A long prompt running beside
+active decoders can create an output stall. A tensor-parallel plan that helps
+prefill may add too much synchronization to decode.
 
 **Prefill/decode separation turns one engine queue into a stage pipeline.**
 The feedback edge on the right is what keeps the pipeline honest: admission
@@ -29,45 +34,6 @@ flowchart LR
     B --> A
 ```
 
-**Conditional placement chooses between local reuse and a transfer boundary.**
-
-```blockdiag
-flowchart TB
-    R["Request shape and queue state"] --> X{"Split saves more interference than transfer costs?"}
-    X -->|No| C["Colocated prefill and decode"]
-    X -->|Yes| P["Remote prefill"]
-    P --> T["Versioned KV transfer"]
-    T --> D["Reserved decode slot"]
-```
-
-**One transfer, four commitments.** The destination reserves before data
-moves, the source publishes into the reservation, both sides poll for
-completion, and only a verified transfer inserts the request into a decode
-batch. Every earlier state is reversible; insertion is not.
-
-```blockdiag
-flowchart LR
-    R["Request admitted to decode"] --> A["Reserve destination blocks"]
-    A --> PB["Publish block map to prefill"]
-    PB --> T["Prefill transfers into reserved blocks"]
-    T --> V{"Poll: Success on all ranks?"}
-    V -->|Yes| I["Insert into decode batch"]
-    V -->|No or Failed| X["Release reservation; retry or re-prefill"]
-```
-
-| Stage | Capacity variable | New failure mode | Admission signal |
-| --- | --- | --- | --- |
-| Prefill | prompt tokens per second | output state piles up | estimated service time |
-| Transfer | bytes and concurrent copies | partial or timed-out KV | reserved bandwidth and deadline |
-| Decode | active sequences and context | no slot after prefill | predicted decode availability |
-| Output | client consumption | backpressure retains state | buffer age and disconnect |
-
-## Why split prefill from decode?
-
-Prefill benefits from large compute-efficient operations. Decode values steady,
-low-latency steps and sufficient memory bandwidth. A long prompt running beside
-active decoders can create an output stall. A tensor-parallel plan that helps
-prefill may add too much synchronization to decode.
 
 The stall is not a corner case — it falls out of the service-time model
 directly. Using the worked example's `prefill_ms = 20 + 0.035 × tokens`, one
@@ -94,7 +60,7 @@ request -> prefill queue -> prefill workers
 
 Separation also makes each phase's parallel plan a free choice. Prefill can
 use wider tensor parallelism to shorten the 230 ms; decode can stay at a
-narrow plan where synchronization overhead dominates. Chapter 12 priced the
+narrow plan where synchronization overhead dominates. Chapter 13 priced the
 difference: two collectives per layer means 160 collective launches per step
 at any tensor width above one, costing ~3.2 ms of startup alone when decode
 batches are small — overhead decode pays every 45 ms step, while prefill's
@@ -110,6 +76,29 @@ way to reduce interference and select phase-specific resource plans.
 The KV cache for a long prompt can be large. Disaggregation helps only if the
 state can be transferred, registered, and made visible before the saved
 interference or better placement pays for that cost.
+
+**One transfer, four commitments.** The destination reserves before data
+moves, the source publishes into the reservation, both sides poll for
+completion, and only a verified transfer inserts the request into a decode
+batch. Every earlier state is reversible; insertion is not.
+
+```blockdiag
+flowchart LR
+    R["Request admitted to decode"] --> A["Reserve destination blocks"]
+    A --> PB["Publish block map to prefill"]
+    PB --> T["Prefill transfers into reserved blocks"]
+    T --> V{"Poll: Success on all ranks?"}
+    V -->|Yes| I["Insert into decode batch"]
+    V -->|No or Failed| X["Release reservation; retry or re-prefill"]
+```
+
+| Stage | Capacity variable | New failure mode | Admission signal |
+| --- | --- | --- | --- |
+| Prefill | prompt tokens per second | output state piles up | estimated service time |
+| Transfer | bytes and concurrent copies | partial or timed-out KV | reserved bandwidth and deadline |
+| Decode | active sequences and context | no slot after prefill | predicted decode availability |
+| Output | client consumption | backpressure retains state | buffer age and disconnect |
+
 
 A transfer protocol needs several pieces of metadata: request identity, model
 and cache format, source and destination ranks, block ranges, memory addresses
@@ -270,6 +259,18 @@ to run entirely on a colocated worker. A request whose prefix is already cached
 on a decode worker may skip remote prefill. A large prompt with a tight ITL SLO
 may benefit most from separation.
 
+**Conditional placement chooses between local reuse and a transfer boundary.**
+
+```blockdiag
+flowchart TB
+    R["Request shape and queue state"] --> X{"Split saves more interference than transfer costs?"}
+    X -->|No| C["Colocated prefill and decode"]
+    X -->|Yes| P["Remote prefill"]
+    P --> T["Versioned KV transfer"]
+    T --> D["Reserved decode slot"]
+```
+
+
 A conditional router compares local execution with remote prefill plus transfer
 and queueing. The worked example gives the comparison shape: remote costs
 ~230 ms prefill + ~95 ms transfer + a decode-queue wait; colocated costs
@@ -295,7 +296,7 @@ and removes nothing, because there is no interference to remove. Conditional
 placement is not a per-request optimization only — it is how the deployment
 stays correct across load levels. Reconfiguration must account for warm weights, graph
 capture, cache loss, and draining — the same invalidation cascade as
-Chapter 12's mesh changes, because a worker changing pools changes its
+Chapter 13's mesh changes, because a worker changing pools changes its
 parallel plan.
 
 ## Encoder, prefill, and decode
@@ -329,6 +330,9 @@ under
 [`distributed/kv_transfer`](https://github.com/vllm-project/vllm/tree/5cecfc01375052698823fc401e31518fb32a981e/vllm/distributed/kv_transfer).
 SGLang's prefill, decode, staging, and transport implementations live under
 [`srt/disaggregation`](https://github.com/sgl-project/sglang/tree/e161bd1265a0082478b7f1c09f224a52d315dc71/python/sglang/srt/disaggregation).
+The current deployment surfaces are documented in the official
+[vLLM disaggregated-prefill guide](https://docs.vllm.ai/en/stable/features/disagg_prefill/)
+and [SGLang PD guide](https://docs.sglang.io/docs/advanced_features/pd_disaggregation).
 
 Both code trees contain several backends and compatibility checks. That is a
 useful warning: a transport name alone does not guarantee support for a model's
@@ -359,7 +363,7 @@ side-effect free," because the scheduler probes speculatively;
 `request_finished` decides who owns the blocks now — it "returns whether KV
 cache should be freed now or if the connector now assumes responsibility for
 freeing the blocks asynchronously," which is how a cache tier can outlive
-its request; `take_events` exports the same KV events Chapter 15's
+its request; `take_events` exports the same KV events Chapter 16's
 distributed cache consumes.
 
 Worker-side primitives do the moving, at layer granularity:
@@ -422,8 +426,4 @@ short and 6,000-token prompts under bursts.
 
 Report every stage queue, TTFT, ITL, goodput, transferred bytes, failure cleanup,
 and idle capacity. Derive a conditional split threshold. The worked model is in
-[Appendix G](../appendices/g-worked-solutions.md#14-prefilldecode-split).
-
-Disaggregation creates a new question: if valuable state can move between
-workers, should it survive beyond the request? Chapter 15 builds a distributed
-cache around that question.
+[Appendix G](../appendices/g-worked-solutions.md#15-prefilldecode-split).

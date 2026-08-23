@@ -1,4 +1,4 @@
-# 3. How Generative Models Execute
+# 3. Model Topologies as Execution Graphs
 
 When a language model writes a sentence, it does not plan the whole sentence
 and reveal it one word at a time. It repeatedly predicts what should come next.
@@ -19,7 +19,20 @@ rather than one fixed block diagram, because serving-oriented architectures
 have changed many details since the original Transformer described in
 [Attention Is All You Need](https://arxiv.org/abs/1706.03762).
 
-## Visual map
+## From a token loop to a work graph
+
+Chapter 0 followed the token loop end to end. Here the loop is useful only as a dependency graph: each decode position reads weights and retained model state, produces logits, commits one sampled token, and makes the next position eligible. A sequence is serial across positions even when thousands of sequences execute together.
+
+That graph exposes the quantities a server must schedule: tensor shapes, persistent bytes, conditional branches, collective communication, and independently placeable stages. The rest of this chapter compares model families through those quantities rather than repeating tokenization, sampling, and detokenization.
+
+## One model, two kinds of work
+
+The first pass over the prompt is called **prefill**. The model processes many
+input positions at once and creates the attention state needed later. Large
+matrix operations during prefill tend to use the accelerator's compute units
+well: a 1,000-token prompt performs a thousand positions' arithmetic while
+reading the weights once, so its intensity resembles ordinary training-style
+compute.
 
 **Prefill creates persistent state; decode consumes and extends it.**
 
@@ -34,104 +47,6 @@ flowchart LR
     N --> D
 ```
 
-**Different model families create different serving graphs.**
-
-```blockdiag
-flowchart TB
-    R["Request"] --> T{"Model topology"}
-    T --> A["Dense decoder: repeated token loop"]
-    T --> B["MoE decoder: route to experts"]
-    T --> C["Multimodal: encoder then decoder"]
-    T --> D["Diffusion: repeated denoising loop"]
-```
-
-The first diagram carries the chapter's central dependency: the arrow from
-the selected token back into both the state and the next step. Everything
-the scheduler struggles with — serialization, preemption costs, speculative
-execution — traces back to that feedback edge. The second diagram is a
-dispatch table: the request's topology decides which serving graph it enters,
-and each branch carries its own persistent state and irregular work.
-
-| Topology | Persistent state | Irregular work | Natural split point |
-| --- | --- | --- | --- |
-| Dense decoder | KV by token | prompt and output length | prefill and decode |
-| MoE decoder | KV plus expert weights | token-to-expert routing | expert ownership |
-| Multimodal | encoder features plus KV | media shape and token count | encoder boundary |
-| Diffusion | latent and conditioning | resolution and denoising step | pipeline stages |
-
-## The autoregressive loop
-
-A decoder-only language model begins with token IDs. It converts them to
-vectors, passes those vectors through a stack of transformer blocks, and
-produces a score for every possible next token. For a vocabulary of 128,000
-entries, that final projection produces 128,000 scores — the logits — from
-which sampling rules select one token. The selected token is appended to the
-sequence, and the process repeats.
-
-```text
-tokens -> transformer blocks -> logits -> sampling -> next token
-   ^                                                 |
-   +-------------------------------------------------+
-```
-
-The next step depends on the token selected in the previous one. This is
-the serial dependency behind decode latency. A server can process many
-sequences together, but one sequence cannot generate its tenth new token before
-it knows the ninth. Parallelism across sequences is free; parallelism within
-one sequence's decode does not exist unless a later mechanism, speculation,
-manufactures it.
-
-The loop also fixes what the engine touches every step. Each step reads
-the model's weights, reads the attention state accumulated so far, computes
-one position's worth of arithmetic per active sequence, writes one new entry
-per layer into that state, and emits one logits vector per sequence. Those
-five facts — four of them dominated by reads — explain most of decode's
-performance character before any kernel details enter.
-
-### What one decode step actually moves
-
-Appendix A defines arithmetic intensity as operations divided by bytes moved
-across a memory boundary, with attainable throughput bounded by the smaller
-of peak compute and bandwidth times intensity. Decode at small batch sits far
-below that crossover, and counting the movement shows why.
-
-Assume the dense decoder inventoried later in this chapter: 140 GB of BF16
-weights. One decode step at batch size 1 must read essentially all of them —
-every layer contributes to the single position being computed — while doing
-roughly two floating-point operations per parameter, about 140 GFLOP. The
-intensity is around one operation per byte moved. On hardware whose compute
-peak is hundreds of times higher than its bandwidth peak allows, the step
-time is set almost entirely by reading weights: the arithmetic units idle
-while the memory system streams.
-
-Raise the batch to 32 active sequences. The weight read happens once and
-still dominates the byte count, but the useful arithmetic grows thirty-two
-fold, so the same read now pays for itself thirty-two times. This is the
-mechanical reason batching raises throughput so dramatically at small batch —
-and why the gains flatten as compute, not bandwidth, becomes the binding
-limit. Chapter 8 builds kernels around exactly this boundary, and Chapter 6's
-scheduler spends its life keeping enough sequences resident to stay on the
-favorable side of it.
-
-Weights are only the first term. Each step also reads every sequence's
-accumulated state, and that term grows with context. At 320 KiB per token, a
-sequence holding 2,000 positions carries about 625 MiB of state; thirty-two
-such sequences make the per-step state read roughly 20 GiB. Weight bytes stay
-fixed while state bytes climb linearly, so long-context serving crosses a
-point where attention traffic, not weight streaming, sets the step time — and
-the crossing arrives sooner for models with more KV heads. This second term
-is why context length is a performance knob and not just a capacity knob, and
-it is the quantity paged attention (Chapter 7) and cache compression
-(Chapter 9) exist to manage.
-
-## One model, two kinds of work
-
-The first pass over the prompt is called **prefill**. The model processes many
-input positions at once and creates the attention state needed later. Large
-matrix operations during prefill tend to use the accelerator's compute units
-well: a 1,000-token prompt performs a thousand positions' arithmetic while
-reading the weights once, so its intensity resembles ordinary training-style
-compute.
 
 After prefill, the model enters **decode**. Each active sequence usually adds
 one position per step. At a small batch size, the GPU repeatedly reads a large
@@ -374,7 +289,7 @@ Encoder output may be reusable when the user asks several questions about the
 same media — the features, unlike the question, do not change. Resolution and frame count also create dynamic shapes: two requests
 differ in encoder workload even when their text is identical length. The encoder is a
 serving stage with its own batching, caching, and placement decisions—not a
-minor preprocessing detail, and Chapter 17 promotes it to a first-class
+minor preprocessing detail, and Chapter 18 promotes it to a first-class
 workload.
 
 Embedding, reranking, classification, and reward models often have no decode
@@ -408,6 +323,32 @@ every other topology through shapes that fit it badly.
 The **model topology** describes what depends on what: layers, experts,
 encoders, attention state, and iterative stages. The **serving topology** maps
 that work onto devices and processes.
+
+**Different model families create different serving graphs.**
+
+```blockdiag
+flowchart TB
+    R["Request"] --> T{"Model topology"}
+    T --> A["Dense decoder: repeated token loop"]
+    T --> B["MoE decoder: route to experts"]
+    T --> C["Multimodal: encoder then decoder"]
+    T --> D["Diffusion: repeated denoising loop"]
+```
+
+The first diagram carries the chapter's central dependency: the arrow from
+the selected token back into both the state and the next step. Everything
+the scheduler struggles with — serialization, preemption costs, speculative
+execution — traces back to that feedback edge. The second diagram is a
+dispatch table: the request's topology decides which serving graph it enters,
+and each branch carries its own persistent state and irregular work.
+
+| Topology | Persistent state | Irregular work | Natural split point |
+| --- | --- | --- | --- |
+| Dense decoder | KV by token | prompt and output length | prefill and decode |
+| MoE decoder | KV plus expert weights | token-to-expert routing | expert ownership |
+| Multimodal | encoder features plus KV | media shape and token count | encoder boundary |
+| Diffusion | latent and conditioning | resolution and denoising step | pipeline stages |
+
 
 The same model can be replicated in full, split across devices by tensor or
 layer, distributed by expert, or separated into encoder, prefill, and decode
@@ -454,5 +395,3 @@ decode shapes, conditional communication, and independently placeable stages.
 Do not choose an engine setting yet. Produce the facts a serving plan must
 respect. The worked inventory is in
 [Appendix G](../appendices/g-worked-solutions.md#3-model-topology-inventory).
-
-The next chapter maps that work onto real memory and interconnects.

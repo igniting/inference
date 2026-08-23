@@ -1,4 +1,4 @@
-# 18. Diffusion, Image, Video, and World Models
+# 19. Diffusion, Image, Video, and World Models
 
 A text-to-image request does not append one pixel at a time. It starts with a
 noisy latent representation and repeatedly transforms that latent toward an
@@ -16,7 +16,9 @@ across requests. Graph capture keys on the request's geometry. And the loop's
 rigid structure — same shapes every step — makes diffusion, oddly, an easier
 target for graphs than language decode.
 
-## Visual map
+## Follow the diffusion pipeline
+
+A common pipeline contains four stages:
 
 **Diffusion repeats a denoising stage around persistent latent state.**
 
@@ -32,27 +34,6 @@ flowchart LR
     V --> O["Media output"]
 ```
 
-**Serving optimizations act at different boundaries in the loop.**
-
-```blockdiag
-flowchart TB
-    R["Request resolution, steps, and conditioning"] --> B["Compatible batching"]
-    B --> G["Graph bucket"]
-    G --> K["Cross-step cache policy"]
-    K --> P["Parallel or staged placement"]
-    P --> Q["Latency and visual-quality evaluation"]
-```
-
-| Mechanism | Saves | Compatibility condition | Quality risk |
-| --- | --- | --- | --- |
-| step batching | launch and weight reuse | resolution, step, and model path | none if semantics match |
-| graph replay | CPU launch work | captured shape and control flow | none if correct fallback |
-| cross-step cache | repeated intermediate compute | sufficiently similar state | approximation drift |
-| stage split | independent scaling | transfer cheaper than queue benefit | none, but latency can regress |
-
-## Follow the diffusion pipeline
-
-A common pipeline contains four stages:
 
 1. a text encoder turns the prompt into conditioning features;
 2. a scheduler defines a sequence of noise levels or timesteps;
@@ -160,6 +141,25 @@ U-Net features across steps; [TeaCache](https://arxiv.org/abs/2411.19108) uses
 timestep-aware differences to decide when cached outputs can be reused in video
 diffusion. The two mark the design space's ends:
 
+**Serving optimizations act at different boundaries in the loop.**
+
+```blockdiag
+flowchart TB
+    R["Request resolution, steps, and conditioning"] --> B["Compatible batching"]
+    B --> G["Graph bucket"]
+    G --> K["Cross-step cache policy"]
+    K --> P["Parallel or staged placement"]
+    P --> Q["Latency and visual-quality evaluation"]
+```
+
+| Mechanism | Saves | Compatibility condition | Quality risk |
+| --- | --- | --- | --- |
+| step batching | launch and weight reuse | resolution, step, and model path | none if semantics match |
+| graph replay | CPU launch work | captured shape and control flow | none if correct fallback |
+| cross-step cache | repeated intermediate compute | sufficiently similar state | approximation drift |
+| stage split | independent scaling | transfer cheaper than queue benefit | none, but latency can regress |
+
+
 | | DeepCache | TeaCache |
 | --- | --- | --- |
 | Reuses | high-level U-Net features | transformer block outputs |
@@ -264,7 +264,7 @@ parallelism over channels. The plan breaks when two methods claim one axis —
 Ulysses-style attention partitions *heads*, which collides with a
 tensor-parallel scheme that already divided them, leaving some ranks no work
 while others carry two roles' communication. And every added split multiplies
-the collectives that must include every rank — Chapter 13's participation rule
+the collectives that must include every rank — Chapter 14's participation rule
 again: a diffusion step is only as fast as its slowest collective member, and a
 composition whose per-step exchange exceeds the 24 ms step budget converts
 parallelism into overhead. Price the composition per step, not per method.
@@ -299,7 +299,7 @@ diffusion parallel groups, compatible batching, graph runners, caching
 integrations, and stage disaggregation under
 [`multimodal_gen/runtime`](https://github.com/sgl-project/sglang/tree/e161bd1265a0082478b7f1c09f224a52d315dc71/python/sglang/multimodal_gen/runtime)
 — including a dedicated `disaggregation` package with dispatch policies,
-roles, and an orchestrator, the E/P/D pattern of Chapter 17 re-derived for
+roles, and an orchestrator, the E/P/D pattern of Chapter 15 re-derived for
 diffusion stages. The code illustrates how text-generation engine ideas can be
 adapted without pretending the loops are identical.
 
@@ -337,7 +337,7 @@ arriving with `block_idx > 0` whose session state is missing raises immediately 
 would otherwise silently fabricate a fresh session and corrupt the stream's
 continuity. A chunk with `block_idx == 0` is an epoch boundary: the client is
 restarting the stream, so the cache disposes the old state and installs the
-new. That is Chapter 16's membership-epoch discipline in miniature — the
+new. That is Chapter 17's membership-epoch discipline in miniature — the
 stream's first block is a self-declaring generation marker, and everything
 after it demands proof the generation is still alive. Eviction disposes state
 explicitly (`_dispose_session`), swallowing and logging disposal failures rather
@@ -387,8 +387,8 @@ buckets, synchronization, intermediate bytes, and every queue.
 Report latency and throughput beside declared visual-quality metrics and
 blinded samples. State the workload boundary where your optimization loses.
 The worked analysis is in
-[Appendix G](../appendices/g-worked-solutions.md#18-diffusion-timeline).
+[Appendix G](../appendices/g-worked-solutions.md#19-diffusion-timeline).
 
 The result should explain where time and bytes go, not announce that one
-optimization is universally best. Chapter 19 returns to language models in a
+optimization is universally best. Chapter 20 returns to language models in a
 different setting: inference embedded inside a training loop.

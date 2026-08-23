@@ -1,4 +1,4 @@
-# 20. Real-Time and Interactive Systems
+# 21. Interactive, Reasoning, and Agentic Systems
 
 A voice assistant listens while the user speaks, begins responding, calls a
 tool, and stops mid-sentence when the user interrupts. There is no clean request
@@ -10,12 +10,19 @@ The user steers constantly — interrupting, backchanneling ("mm-hm"), pausing,
 resuming — and the system must treat each of those as a scheduled event, not
 as noise to filter out.
 
-Real-time inference is defined by deadlines and interruption, not merely low
-average latency. Every mechanism from Parts I through IV — batching, caches,
-scheduling, streaming — survives into this chapter, but each one answers to a
-clock that never stops and a user who can veto the output at any moment.
+Interactive inference is defined by deadlines, interruption, and suspended
+work, not merely low average latency. Voice and video systems expose stale
+output immediately. Reasoning models expose long, heavy-tailed generations;
+agentic systems add tool waits during which a request is alive but may not
+deserve accelerator memory. Every mechanism from Parts I through IV survives,
+but the scheduler must now understand more than a stream of decode tokens.
 
-## Visual map
+## Build the latency budget backward
+
+Suppose the product allows 700 milliseconds from the end of a user's phrase to
+the beginning of audible speech. That budget includes network transport, speech
+recognition, endpoint detection, language-model queueing and prefill, first
+tokens, text-to-speech startup, and audio buffering.
 
 **A live conversation streams through several models and transports.**
 
@@ -31,31 +38,6 @@ flowchart LR
     S --> P["Playback buffer"]
 ```
 
-**Interruption advances the session generation and fences late work.**
-
-```blockdiag
-flowchart LR
-    G7["Turn generation 7"] --> O["Text and audio in flight"]
-    I["User interruption"] --> G8["Advance to generation 8"]
-    G8 --> C["Cancel scheduling, synthesis, and playback"]
-    O --> X{"Event generation current?"}
-    X -->|No| D["Discard late event"]
-    X -->|Yes| P["Deliver event"]
-```
-
-| User-visible interval | Begins | Ends | Primary owner |
-| --- | --- | --- | --- |
-| end-of-turn to text | stable endpoint | first useful token | ASR and LLM path |
-| end-of-turn to audio | stable endpoint | audible first sample | full speech pipeline |
-| interruption to silence | new speech detected | playback stopped | session controller |
-| stream freshness | media arrival | processing or drop | deadline-aware queues |
-
-## Build the latency budget backward
-
-Suppose the product allows 700 milliseconds from the end of a user's phrase to
-the beginning of audible speech. That budget includes network transport, speech
-recognition, endpoint detection, language-model queueing and prefill, first
-tokens, text-to-speech startup, and audio buffering.
 
 Improving language TTFT from 250 to 200 milliseconds helps. It does not save a
 system that spends 600 milliseconds detecting the end of speech. This is why
@@ -120,7 +102,7 @@ fresh endpointing, and a transcript rebuilt from history. A protocol that
 silently mixes the two produces duplicated or missing audio with no way to
 diagnose which happened.
 Transport keepalive is not the same as model-worker health — a socket can be
-open while the engine behind it has wedged, which is why Chapter 16's health
+open while the engine behind it has wedged, which is why Chapter 17's health
 semantics apply per component, not just per connection.
 
 ### Queues bound age, not size
@@ -154,7 +136,7 @@ Partial hypotheses create a hidden coupling back into Part III: every token
 the LLM prefills against a *stale* hypothesis is work that a revision
 invalidates. If the recognizer revises "book a table for two" into "book a
 table for twelve," the KV blocks computed past the revision point are wrong —
-Chapter 15's prefix reuse, running in miniature, once per hypothesis update.
+Chapter 16's prefix reuse, running in miniature, once per hypothesis update.
 A well-built pipeline therefore gates LLM starts on hypothesis stability (or
 prefills only the stable prefix), accepting some start latency to avoid paying
 repeated invalidated prefills.
@@ -215,6 +197,26 @@ half-duplex politeness or require the new speech to exceed an energy threshold
 for some duration. Every one of those mitigations adds detection latency to
 the interruption-to-silence budget before any cancellation even starts.
 
+**Interruption advances the session generation and fences late work.**
+
+```blockdiag
+flowchart LR
+    G7["Turn generation 7"] --> O["Text and audio in flight"]
+    I["User interruption"] --> G8["Advance to generation 8"]
+    G8 --> C["Cancel scheduling, synthesis, and playback"]
+    O --> X{"Event generation current?"}
+    X -->|No| D["Discard late event"]
+    X -->|Yes| P["Deliver event"]
+```
+
+| User-visible interval | Begins | Ends | Primary owner |
+| --- | --- | --- | --- |
+| end-of-turn to text | stable endpoint | first useful token | ASR and LLM path |
+| end-of-turn to audio | stable endpoint | audible first sample | full speech pipeline |
+| interruption to silence | new speech detected | playback stopped | session controller |
+| stream freshness | media arrival | processing or drop | deadline-aware queues |
+
+
 Those actions cannot happen atomically across several services. Use a session
 generation number or turn ID. Events from an old generation are ignored after
 the interruption advances the session.
@@ -237,8 +239,8 @@ playback under the then-current generation — enters the visible conversation;
 generated-but-unheard text is recorded as diagnostic state, never silently
 treated as spoken.
 
-Readers have met this pattern twice before. It is Chapter 16's membership
-epoch (a stale health report self-invalidates) and Chapter 19's policy version
+Readers have met this pattern twice before. It is Chapter 17's membership
+epoch (a stale health report self-invalidates) and Chapter 20's policy version
 (a trajectory stamped with an old version cannot contaminate a new round).
 Real-time interruption adds only one twist: the fence must be checked at
 *consumption* time, not just dispatch time, because the consumer — the user's
@@ -281,7 +283,7 @@ reconstruct. Checkpoint frequency should follow the product's recovery
 requirement: how many seconds of conversation is a worker loss allowed to
 cost?
 
-Migration, when chosen, inherits Chapter 16's sticky-session escape rules —
+Migration, when chosen, inherits Chapter 17's sticky-session escape rules —
 affinity is a preference evaluated per turn, never a requirement the user's
 latency pays for.
 
@@ -296,10 +298,61 @@ Checkpointing everything at one cadence either wastes bandwidth on cheap state
 or under-protects expensive state. In-flight tool calls and parser state need
 an owner decision too: if a worker dies holding a pending tool invocation, the
 recovering session must either re-issue it — needing a stable request ID so the
-tool can suppress duplicates, per Chapter 16 — or leave it abandoned and let
+tool can suppress duplicates, per Chapter 17 — or leave it abandoned and let
 the turn's fence mark its eventual completion as diagnostic. Silence in the
 meantime must be bounded by a timeout, because a hung tool otherwise becomes a
 session that never responds again.
+
+## Reasoning changes the workload shape
+
+A reasoning model may emit an internal reasoning stream before its visible
+answer, use a parser to separate the two, and vary that work by orders of
+magnitude across superficially similar prompts. Admission therefore needs a
+budget for total generated work, not merely visible answer length. Traces must
+record reasoning and answer tokens separately so that a product cannot appear
+to reduce latency by hiding work from its accounting.
+
+**An agentic turn alternates active generation with suspended work.**
+
+```blockdiag
+flowchart LR
+    U["User turn"] --> R["Reasoning generation"]
+    R --> P["Reasoning and tool parser"]
+    P -->|Need evidence| T["Tool call"]
+    T --> W["Suspended request"]
+    W -->|Result and valid fence| R
+    P -->|Ready| A["Visible answer"]
+```
+
+Chapter 22 owns the parser and wire contract. This chapter owns what that
+contract does to scheduling: reasoning tokens consume decode slots, parser
+state must survive interruption, and a disabled or shortened reasoning mode is
+a quality-tier decision rather than a free speed switch. The current
+[SGLang reasoning-parser documentation](https://docs.sglang.ai/advanced_features/separate_reasoning.html)
+shows the explicit separation, while the
+[vLLM feature index](https://docs.vllm.ai/en/latest/features/)
+tracks the serving controls that interact with it.
+
+Compressing or discarding reasoning history can reduce the next turn's prefill
+and KV footprint, but it changes model input and may change answer quality.
+Treat the summary algorithm and version as cache identity, evaluate the quality
+trade, and apply Chapter 26's retention rules to both the original reasoning
+and its summary.
+
+## Tool gaps create suspended requests
+
+While a tool runs, retaining all KV blocks buys a fast resume and charges scarce
+memory to idle wall time. Releasing them saves capacity and later pays a prefill
+or restore cost. Make that choice from expected tool latency, state size,
+available cache tiers, and the turn's remaining deadline. A short database read
+may justify retention; a human-approval step usually does not.
+
+Suspension needs a stable request identity, an expiry time, and a generation
+fence. When the tool returns, the router must find the session owner or restore
+its state, then verify that the turn is still current before resuming. Tool
+execution also needs its own idempotency key: retrying a generation is safe only
+when it cannot repeat an external action. Late results become diagnostic data,
+not new model input.
 
 ## Graceful degradation is a scheduler policy
 
@@ -323,7 +376,7 @@ poverty. A defensible ladder spends cheap quality first:
 
 Each tier is a *scheduler policy* with its own trigger metric — queue age,
 deadline-miss rate, session count — not an operator's manual intervention.
-Tier 1 refunds slack immediately, as Chapter 18's sessions do; tier 5 is last
+Tier 1 refunds slack immediately, as Chapter 19's sessions do; tier 5 is last
 because it converts overload into unavailability. The scheduler needs deadlines
 and quality tiers to execute
 any of this mechanically rather than as ad-hoc throttles.
@@ -396,7 +449,7 @@ cancellation.
 
 Write ordering, generation, backpressure, history-commit, and cleanup rules.
 The complete worked timeline is in
-[Appendix G](../appendices/g-worked-solutions.md#20-ten-second-conversation).
+[Appendix G](../appendices/g-worked-solutions.md#21-ten-second-conversation).
 
 Parts I through IV have focused on execution mechanisms. Part V turns them into
 a production contract: APIs, experiments, operations, economics, and security.

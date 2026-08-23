@@ -318,7 +318,34 @@ shapes. Verify output distribution equivalence for the algorithm in use; equal
 tokens under one random seed are useful debugging evidence but not the whole
 distributional contract.
 
-## 12. Two parallel plans
+
+## 12. Adapter routing simulation
+
+The exercise asks for adapter-aware versus adapter-blind routing with
+Zipf-distributed popularity across 50 adapters.
+
+Model the adapter popularity with a Zipf distribution (α = 1.1). The top 5
+adapters receive roughly 45% of requests; the bottom 30 receive about 15%
+combined. With three replicas and round-robin routing, each replica must
+load all 50 adapters on demand — at 160 MiB per adapter and 3 ms host-to-
+device transfer, cold loads add 3 ms per miss and 50 × 160 MiB = 8 GiB of
+adapter state per replica in steady state.
+
+With adapter-aware routing, partition adapters by popularity: the top 10
+(hot set) replicate everywhere; the next 20 partition across two replicas
+each; the bottom 20 partition to one replica each. Each replica holds
+10 + 10 + ~7 ≈ 27 adapters in steady state (4.3 GiB), and cold loads drop
+to only the tail adapters accessed for the first time. Monitor four
+quantities: cold load rate per replica, adapter memory per replica, max
+queue depth per replica, and p99 TTFT.
+
+The key insight: the routing score must penalize queue depth enough that
+adapter affinity does not create hot-replica bottlenecks. When the busiest
+adapter attracts 12% of traffic, sending all of it to one replica creates
+a 3× load imbalance. The solution is a composite score with load weight
+exceeding affinity weight, as Chapter 12's worked example demonstrates.
+
+## 13. Two parallel plans
 
 Use eight GPUs in one fast-link island for one Atlas replica.
 
@@ -342,7 +369,7 @@ and minimizing bubbles matters. Plan B may win for sustained throughput when
 four-rank collectives are materially cheaper and concurrency fills the
 pipeline. Measure prefill and decode separately; one winner is not required.
 
-## 13. Expert trace and placement
+## 14. Expert trace and placement
 
 Assume one MoE layer has eight experts on four ranks, two experts per rank. A
 decode step routes 64 tokens with counts:
@@ -366,7 +393,7 @@ and cache disturbance. Apply a generation number: new batches use the new
 placement only after every rank acknowledges it; old batches finish under the
 old map. Keep a fallback copy during the transition if memory allows.
 
-## 14. Prefill/decode split
+## 15. Prefill/decode split
 
 Assume measured service models:
 
@@ -393,7 +420,7 @@ destination state and either retry within the deadline or recompute. Report
 stage utilization because low end-to-end latency obtained with a mostly idle
 pool may be economically unacceptable.
 
-## 15. Distributed prefix lifecycle
+## 16. Distributed prefix lifecycle
 
 Give the prefix an identity derived from model version, tokenizer, adapter,
 tenant namespace, token sequence, position scheme, and state format. GPU A
@@ -417,7 +444,7 @@ gross request saving is 110 ms. Include queueing and the opportunity cost of 1
 GiB on the destination before deciding to promote it. A hit counter alone
 cannot express that value.
 
-## 16. Cache-aware routing
+## 17. Cache-aware routing
 
 Assume three replicas. R0 has a 4,000-token prefix but 300 ms of queued work;
 R1 is idle without the prefix; R2 has half the prefix and 100 ms queued.
@@ -442,7 +469,7 @@ small popularity change. The simulator should delay telemetry deliberately;
 perfect instantaneous queue knowledge would make the router unrealistically
 powerful.
 
-## 17. Multimodal first-output path
+## 18. Multimodal first-output path
 
 For a repeated image question, suppose the first request has this trace:
 
@@ -468,7 +495,7 @@ disabled request. If disaggregating the encoder adds a 35 ms transfer instead
 of 12 ms but removes an 80 ms queue at the language worker, it improves TTFT;
 for uncached tiny images, the extra boundary may lose.
 
-## 18. Diffusion timeline
+## 19. Diffusion timeline
 
 Assume an image pipeline spends 18 ms in text encoding, 30 denoising steps at
 24 ms each, 55 ms in latent decoding, and 22 ms postprocessing. Total service
@@ -490,7 +517,7 @@ Report paired blinded samples and a declared quality metric. A latency win that
 changes composition or temporal consistency is a different product setting,
 not a free acceleration.
 
-## 19. Policy update transaction
+## 20. Policy update transaction
 
 Every rollout carries `policy_version = 41`. The trainer produces version 42 in
 staging storage with a manifest of tensors, shapes, dtypes, and checksums.
@@ -514,7 +541,7 @@ serving layer must not invent the rule. Log token IDs, masks, sampling state,
 and log-probability semantics so training can reproduce or deliberately trust
 the rollout calculation.
 
-## 20. Ten-second conversation
+## 21. Ten-second conversation
 
 One coherent timeline is:
 
@@ -543,7 +570,7 @@ cancels future LLM scheduling and TTS, stops playback, and makes late generation
 visible conversation history; generated-but-unplayed text is recorded as
 diagnostic state, not silently treated as spoken.
 
-## 21. Protocol conformance
+## 22. Protocol conformance
 
 Define one golden request with a pinned tokenizer and chat template. Test the
 non-streamed body and streamed events against the same semantic result. The
@@ -565,7 +592,7 @@ Run the suite against old and new engine revisions. Any difference is
 classified as intended API change, allowed numerical variation, or regression.
 “Both returned HTTP 200” is not conformance.
 
-## 22. Benchmark card
+## 23. Benchmark card
 
 A minimally credible card contains:
 
@@ -590,7 +617,7 @@ traffic, cache warmth, artifact hashes, and workload ordering. The correct
 response is to explain or bound the variance. Averaging two different regimes
 produces a precise number for no reproducible system.
 
-## 23. Operations runbook
+## 24. Operations runbook
 
 Symptom: p95 TTFT rises from 480 ms to 1.4 s while GPU utilization falls from
 72 to 38 percent.
@@ -616,7 +643,7 @@ cleanup, and recovery without leaked destination blocks. The dashboard must
 show stage queue age, transfer count and bytes, timeout reason, recomputation,
 and end-to-end goodput.
 
-## 24. Architecture decision
+## 25. Architecture decision
 
 Decision: serve Atlas on self-managed accelerator nodes using four-way tensor-
 parallel replicas, token-budget continuous batching, local prefix caching, and
@@ -644,33 +671,38 @@ TTFT objective tightens, separate prefill capacity may become worthwhile. An
 ADR is complete only when it names these review triggers and the evidence that
 would reopen the decision.
 
-## 11b. Adapter routing simulation
+## 26. Security boundaries
 
-The exercise asks for adapter-aware versus adapter-blind routing with
-Zipf-distributed popularity across 50 adapters.
+Atlas uses six trust zones: public clients, the authenticated gateway, tenant-
+aware schedulers and workers, state stores, artifact supply, and privileged
+administration. Tools form a seventh zone because they receive model-proposed
+actions but hold authority outside the inference service.
 
-Model the adapter popularity with a Zipf distribution (α = 1.1). The top 5
-adapters receive roughly 45% of requests; the bottom 30 receive about 15%
-combined. With three replicas and round-robin routing, each replica must
-load all 50 adapters on demand — at 160 MiB per adapter and 3 ms host-to-
-device transfer, cold loads add 3 ms per miss and 50 × 160 MiB = 8 GiB of
-adapter state per replica in steady state.
+| Crossing | Identity and allowed action | Limit | Evidence and fail-closed behavior |
+| --- | --- | --- | --- |
+| client → gateway | tenant credential; submit declared endpoint inputs | request bytes, decoded media, token work, concurrency | request ID and decision log; reject before parsing or admission |
+| gateway → worker | signed internal workload identity; execute one admitted request | token budget, deadline, adapter and cache namespace | admission reason and generation fence; no healthy target means reject |
+| worker → cache | tenant plus model-execution identity; read or write matching blocks | occupancy and TTL | hit namespace and key version; mismatch is a miss, never a fallback to another tenant |
+| registry → worker | release identity; load an approved digest | artifact size and approved code policy | signature, checksum, SBOM, and load audit; unsigned or mismatched artifacts never become ready |
+| operator → management API | privileged operator role; named control operation | scoped role, rate, and maintenance window | immutable audit event; public inference credentials are invalid |
+| worker → tool | user delegation plus tool-specific scope; one idempotent action | action schema, monetary/data scope, timeout | proposal, confirmation, result, and idempotency key; invalid or expired fences discard the result |
 
-With adapter-aware routing, partition adapters by popularity: the top 10
-(hot set) replicate everywhere; the next 20 partition across two replicas
-each; the bottom 20 partition to one replica each. Each replica holds
-10 + 10 + ~7 ≈ 27 adapters in steady state (4.3 GiB), and cold loads drop
-to only the tail adapters accessed for the first time. Monitor four
-quantities: cold load rate per replica, adapter memory per replica, max
-queue depth per replica, and p99 TTFT.
+The deletion proof starts with the request ID and its tenant namespace. Revoke
+new reads first, then invalidate local and distributed KV keys, encoder-feature
+keys, and any adapter- or parser-derived state. Delete prompt-bearing logs and
+traces or retain only fields covered by the declared telemetry policy. Remove
+the request from replay and benchmark datasets. Record acknowledgements from
+every cache replica and storage region rather than treating a control-plane
+request as proof of deletion.
 
-The key insight: the routing score must penalize queue depth enough that
-adapter affinity does not create hot-replica bottlenecks. When the busiest
-adapter attracts 12% of traffic, sending all of it to one replica creates
-a 3× load imbalance. The solution is a composite score with load weight
-exceeding affinity weight, as Chapter 11b's worked example demonstrates.
+Backups determine the upper bound. If encrypted backups expire after 30 days
+and cannot delete one object in place, the proof says "inaccessible now and
+physically expired within 30 days," names the key-erasure mechanism, and tests
+that a restore cannot reintroduce live cache indexes or service-visible data.
+The exercise is complete only when every derivative has either a deletion
+receipt or a bounded expiry with an owner and verification procedure.
 
-## 22b. Debugging exercises
+## Appendix I. Debugging exercises
 
 The debugging chapter's walkthroughs are self-contained investigations.
 The practice exercise is to apply the five-step method to a new symptom:

@@ -9,7 +9,13 @@ streaming back. Every number comes from a concrete model on concrete hardware.
 Every step will reappear, with complications, in later chapters — but here
 it is just a loop, and the loop is short enough to hold in your head.
 
-## Visual map
+## The model on the wire
+
+Assume the model used throughout this book's exercises: a dense decoder with
+approximately 70 billion parameters, stored in BF16 (two bytes per parameter).
+It has 80 transformer layers, 8 key-value heads per layer, and a head dimension
+of 128. This is the "Atlas" model collected in the reference card later in this
+chapter and used in every worked example.
 
 **One request through one GPU: the complete path.**
 
@@ -31,13 +37,6 @@ loop runs until a stop condition fires. Everything before prefill is string
 manipulation; everything after sampling is string manipulation. The GPU work
 lives in the middle, and that middle is where time goes.
 
-## The model on the wire
-
-Assume the model used throughout this book's exercises: a dense decoder with
-approximately 70 billion parameters, stored in BF16 (two bytes per parameter).
-It has 80 transformer layers, 8 key-value heads per layer, and a head dimension
-of 128. This is the "Atlas" model defined in Appendix G and used in every
-worked example.
 
 The weight footprint is direct arithmetic:
 
@@ -49,7 +48,7 @@ That 140 GB must sit in GPU memory before the model can answer anything. On a
 single 80 GB accelerator, the weights do not fit; on a pair they do, but with
 little room to spare. For now, assume the model is loaded and ready. Chapter 4
 addresses the topology question — how many devices, connected how — and
-Chapter 12 addresses the parallelism question — how to split the work across
+Chapter 13 addresses the parallelism question — how to split the work across
 them.
 
 ## Text to tokens
@@ -322,13 +321,17 @@ bottom, a strategy for managing this exchange:
 | Chapter | What it manages |
 | --- | --- |
 | 6. Scheduling | which requests share each step, and how many |
-| 7. KV cache | how memory is allocated, paged, and reclaimed |
+| 7. Local model state | how memory is allocated, paged, and reclaimed |
 | 8. Kernels | how to make the weight read and attention faster |
+| 9. Compilation | how to avoid repeating launch and specialization work |
 | 10. Quantization | how to make weights and cache smaller |
 | 11. Speculation | how to get more tokens per step |
-| 12. Parallelism | how to spread work across devices |
-| 14. Disaggregation | how to separate prefill from decode |
-| 16. Routing | how to choose which replica serves a request |
+| 12. Adapters | how customized weights share a base model |
+| 13. Parallelism | how to spread work across devices |
+| 14. MoE | how to place and balance conditional experts |
+| 15. Disaggregation | how to separate encoder, prefill, and decode |
+| 16. Distributed caching | how reusable state outlives one worker |
+| 17. Routing | how to choose which replica serves a request |
 
 Each entry in this table addresses a consequence of the single fact that
 serving more concurrent requests is both necessary for efficiency and

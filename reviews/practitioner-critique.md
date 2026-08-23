@@ -1,5 +1,9 @@
 # Practitioner Critique: Inference Systems — Engineering Generative AI from Kernel to Cluster
 
+> Historical review of an earlier manuscript pass. Its chapter numbers and
+> stated gaps are preserved because this critique drove the final structural
+> revision documented in `final-editorial-review.md`.
+
 **Reviewer profile:** Engineer working on model inference daily using vLLM and SGLang.
 
 **Review question:** Can this book take a regular software engineer with no inference background and bring them to a practicing inference engineer's level?

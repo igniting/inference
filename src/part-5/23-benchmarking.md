@@ -1,4 +1,4 @@
-# 22. Benchmarking and Performance Science
+# 23. Benchmarking and Performance Science
 
 A benchmark is an experiment designed to answer a decision. Without the
 decision, it becomes a number generator.
@@ -20,7 +20,9 @@ number: a result that is precisely measured, cleanly plotted, and answers a
 question nobody asked — or worse, answers it under conditions so different
 from production that the decision it drives is a coin flip with extra steps.
 
-## Visual map
+## Begin with a hypothesis
+
+Write the expected causal chain before running the test. For example:
 
 **A benchmark is an evidence loop, not a single load-generator run.**
 
@@ -34,27 +36,6 @@ flowchart LR
     C --> H
 ```
 
-**Offered load must be swept through the service's operating regimes.**
-
-```blockdiag
-flowchart LR
-    L["Low load"] --> S["Saturation approach"]
-    S --> O["Overload"]
-    L --> M1["Latency floor"]
-    S --> M2["Goodput knee"]
-    O --> M3["Queue growth and rejection"]
-```
-
-| Benchmark layer | Controlled input | Required output | Frequent mistake |
-| --- | --- | --- | --- |
-| Microbenchmark | operation and shape | latency and numerical error | claiming service speedup |
-| Engine | batch and state | step time and resource trace | excluding preparation |
-| Service | arrivals and requests | latency, errors, throughput, goodput | closed-loop overload masking |
-| Product | task population | usefulness and cost | optimizing invalid output |
-
-## Begin with a hypothesis
-
-Write the expected causal chain before running the test. For example:
 
 ```text
 smaller prefill chunks
@@ -130,7 +111,7 @@ costs. Four traps account for most wrong microbenchmark numbers:
   launches and say which you did.
 - **Shape cherry-picking.** Reporting the three shapes where your kernel wins,
   from a sweep of thirty, is a marketing document. Publish the full sweep;
-  Chapter 18's capture-signature discipline exists partly so the served shapes
+  Chapter 9's capture-signature discipline exists partly so the served shapes
   are enumerable and therefore benchmarkable.
 - **No error accounting.** A fused kernel that runs faster while changing
   accumulation order has changed the product. The layer's own table demands
@@ -173,7 +154,7 @@ diagnosis queue, not a mystery.
 **Assemble.** At ~200 output tokens per response, decode alone sustains
 about `700 / 200 ≈ 3.5` requests per second per replica; applying Chapter 2's
 operating-utilization discipline and TTFT admission trims that to a few
-qualifying requests per second — within a factor of two of Chapter 24's
+qualifying requests per second — within a factor of two of Chapter 25's
 declared operating point, which is precisely the accuracy band a
 pre-benchmark estimate should claim. The estimate's real products are the
 *constraints*: concurrency bounded by KV bytes, throughput by step time,
@@ -197,26 +178,11 @@ wait before issuing more work. Label the choice.
 Warm and cold tests answer different questions. A cold test includes model
 loading, compilation, graph capture, and empty caches. A steady-state test
 should define its warm-up and confirm that compilation or allocation is no
-longer changing the system — Chapter 18's capture-once discipline means a
+longer changing the system — Chapter 9's capture-once discipline means a
 well-behaved engine converges, but a benchmark that starts measuring before
 the last graph is captured is measuring the compiler, not the service.
 
-### Open loop, closed loop, and the knee they find
-
-The two arrival processes find different knees, and the difference is
-arithmetic, not taste. Little's law (`Q = λW`, Appendix A) says a closed-loop
-population of `Q = 8` clients facing mean end-to-end latency `W = 1.5 s`
-offers at most `λ = Q/W ≈ 5.3` requests per second. Now degrade the service:
-latency doubles to 3 s. The closed loop's offered load *falls* to `8/3 ≈ 2.7`
-requests per second — the clients politely back off exactly when you wanted to
-see the failure, and measured throughput degrades gracefully all the way into
-collapse. An open loop holding `λ` at 8 keeps the pressure on: queue age grows
-without bound, TTFT breaches, and the admission controller's rejection path —
-the one production will actually exercise — finally runs. Overload behavior is
-a property of the *offered* load, so the experiment that studies it must pin
-the offer, not the population. Closed loop remains the right model for fixed
-client pools (an internal batch consumer with eight workers); the error is
-using it to certify a service whose callers are the open internet.
+Chapter 2 defines open- and closed-loop traffic and derives why they expose different overload behavior. A benchmark uses that distinction rather than re-deriving it: choose open loop when arrivals are externally driven or overload is under test, and closed loop only when a fixed client population is itself part of the workload.
 
 ### What a trace replay must preserve
 
@@ -242,6 +208,25 @@ more faithful to output-length variance, and the card should say which.
 
 Increase offered load until one or more SLOs fail. Plot goodput rather than
 publishing one throughput point. The curve reveals saturation and collapse.
+
+**Offered load must be swept through the service's operating regimes.**
+
+```blockdiag
+flowchart LR
+    L["Low load"] --> S["Saturation approach"]
+    S --> O["Overload"]
+    L --> M1["Latency floor"]
+    S --> M2["Goodput knee"]
+    O --> M3["Queue growth and rejection"]
+```
+
+| Benchmark layer | Controlled input | Required output | Frequent mistake |
+| --- | --- | --- | --- |
+| Microbenchmark | operation and shape | latency and numerical error | claiming service speedup |
+| Engine | batch and state | step time and resource trace | excluding preparation |
+| Service | arrivals and requests | latency, errors, throughput, goodput | closed-loop overload masking |
+| Product | task population | usefulness and cost | optimizing invalid output |
+
 
 Learn to read the curve's three regions. At low load, goodput tracks offered
 load one-to-one and latencies sit near their floor — the system is
@@ -302,7 +287,7 @@ response will be marked as failed!" — and the payload pins
 `temperature: 0.0`, because sampling variance is not what is under test.
 Goodput is a per-request conjunction: `is_good_req = all(...)` over every
 configured SLO, so a request that meets TTFT but misses TPOT counts as
-failed for goodput purposes. Chapter 21's rule — "both returned HTTP 200 is
+failed for goodput purposes. Chapter 22's rule — "both returned HTTP 200 is
 not conformance" — is the same discipline pointed at correctness; here it is
 pointed at speed.
 
@@ -461,7 +446,4 @@ quality checks, repetitions, raw event schema, analysis revision, and second-
 day reproduction procedure.
 
 State the exact claim the evidence could falsify. A complete example appears in
-[Appendix G](../appendices/g-worked-solutions.md#22-benchmark-card).
-
-Once a service is deployed, the experiment continues under real traffic.
-Chapter 23 covers the signals and operating practices that keep it interpretable.
+[Appendix G](../appendices/g-worked-solutions.md#23-benchmark-card).

@@ -1,4 +1,4 @@
-# 16. Routing, Replication, and the Control Plane
+# 17. Routing, Replication, and the Control Plane
 
 Once a service has several replicas, the frontend must decide where each
 request goes. Round-robin routing is attractive because it needs little state.
@@ -18,7 +18,13 @@ request. The same principles apply at both levels — estimate service time,
 admit against capacity, protect SLOs — but the router works with worse
 information: its view of every replica is a report about the past.
 
-## Visual map
+## A replica has more state than “healthy”
+
+Useful routing information can include queue length, estimated remaining work,
+free KV blocks, active batch composition, cached prefixes, adapters, model
+version, current stage role, and recent failures. Each field earns its place
+on the report only if some policy consumes it, and different policies lean on
+almost disjoint subsets:
 
 **The global router predicts a destination; the local scheduler owns execution.**
 Telemetry flows one way, decisions the other, and the loop closes only as fast
@@ -36,33 +42,6 @@ flowchart LR
     W3 --> T
 ```
 
-**A hybrid routing score compares waiting, recomputation, and movement.**
-
-```blockdiag
-flowchart TB
-    C["Candidate replica"] --> Q["Estimate queue time"]
-    C --> P["Estimate missing-prefix compute"]
-    C --> T["Estimate transfer or adapter load"]
-    Q --> S["Combined cost plus uncertainty"]
-    P --> S
-    T --> S
-    S --> D["Choose destination and record prediction"]
-```
-
-| Policy | Sees queue? | Sees locality? | Characteristic failure |
-| --- | --- | --- | --- |
-| Round robin | no | no | unequal work per request |
-| Least work | yes | no | repeated expensive prefill |
-| Cache only | no | yes | hot cached replica |
-| Hybrid cost | estimated | estimated | stale or misweighted predictions |
-
-## A replica has more state than “healthy”
-
-Useful routing information can include queue length, estimated remaining work,
-free KV blocks, active batch composition, cached prefixes, adapters, model
-version, current stage role, and recent failures. Each field earns its place
-on the report only if some policy consumes it, and different policies lean on
-almost disjoint subsets:
 
 | Reported field | Consumed by | Failure when absent |
 | --- | --- | --- |
@@ -121,6 +100,27 @@ Least-estimated-work tries to include prompt and expected output length.
 Session affinity keeps related turns together. Cache-aware routing values saved
 prefill. Priority-aware routing reserves capacity for important traffic.
 
+**A hybrid routing score compares waiting, recomputation, and movement.**
+
+```blockdiag
+flowchart TB
+    C["Candidate replica"] --> Q["Estimate queue time"]
+    C --> P["Estimate missing-prefix compute"]
+    C --> T["Estimate transfer or adapter load"]
+    Q --> S["Combined cost plus uncertainty"]
+    P --> S
+    T --> S
+    S --> D["Choose destination and record prediction"]
+```
+
+| Policy | Sees queue? | Sees locality? | Characteristic failure |
+| --- | --- | --- | --- |
+| Round robin | no | no | unequal work per request |
+| Least work | yes | no | repeated expensive prefill |
+| Cache only | no | yes | hot cached replica |
+| Hybrid cost | estimated | estimated | stale or misweighted predictions |
+
+
 Each policy sees only part of the cost. A good practical score can combine
 estimated queue time, execution work, cache savings, transfer cost, and a
 penalty for uncertain or stale telemetry.
@@ -150,7 +150,7 @@ R1 a required adapter it does not hold: assume loading that adapter costs
 1,040 ms and it drops from second place to last — a policy that ignored the
 adapter term would have sent every subsequent adapter-sharing request there
 too, paying 800 ms each time until the adapter warmed. Transfer works the
-same way in disaggregated deployments: Chapter 14 priced a 6,000-token KV
+same way in disaggregated deployments: Chapter 15 priced a 6,000-token KV
 move at ~95 ms, which is exactly the kind of term that belongs here rather
 than being discovered after admission.
 
@@ -188,7 +188,7 @@ a few GiB. Hit rate, however, drifts: a prefix becomes popular with a news
 cycle and fades with it. Replication decisions therefore need the same
 hysteresis as autoscaling — promote on sustained hit rate, demote on sustained
 absence — because a policy that flips on every crossing thrashes memory and
-invalidation traffic alike. Chapter 15's invalidation ladder prices the
+invalidation traffic alike. Chapter 16's invalidation ladder prices the
 demotion side of that flip.
 
 ## Sessions need a state policy
@@ -220,9 +220,9 @@ control plane needs a view of total queued work and stage capacity.
 
 In a prefill/decode deployment, admission should consider both pools. Sending a
 request into an available prefill worker is harmful if no decode capacity will
-be ready afterward — Chapter 14's coupled queues are the mechanism, and the
+be ready afterward — Chapter 15's coupled queues are the mechanism, and the
 router sits close enough to see both sides. In an MoE deployment, a network or expert hotspot can limit
-capacity while aggregate GPU utilization looks low; Chapter 13's balancedness
+capacity while aggregate GPU utilization looks low; Chapter 14's balancedness
 statistic is the sort of signal that distinguishes "spare capacity" from
 "capacity gated by one rank."
 
@@ -289,7 +289,7 @@ decision is really a forecast with a four-minute horizon.
 Hysteresis sizing follows from the same number. The down-scale threshold
 should sit far enough below the up-scale threshold that normal traffic noise
 cannot traverse both within one drain cycle, and drained replicas should
-release state in the order Chapter 15's invalidation ladder defines —
+release state in the order Chapter 16's invalidation ladder defines —
 visibility first, storage later — so a flapping fleet does not thrash the
 distributed cache along with itself.
 
@@ -390,7 +390,7 @@ Find when replication of the hot prefix repays its memory and add hysteresis to
 prevent oscillation. Delay telemetry deliberately in the simulator — G's note
 is worth keeping: perfect instantaneous queue knowledge would make the router
 unrealistically powerful. The worked decision is in
-[Appendix G](../appendices/g-worked-solutions.md#16-cache-aware-routing).
+[Appendix G](../appendices/g-worked-solutions.md#17-cache-aware-routing).
 
 The simulation completes the path from one request to a distributed text
 service. Part IV applies the same ideas to models whose serving loops are not

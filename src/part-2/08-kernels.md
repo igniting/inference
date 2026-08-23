@@ -19,48 +19,6 @@ a step. The runner's craft is knowing which contract governs the current step,
 and the benchmark discipline at the end of the chapter exists because no
 single measurement can check them all.
 
-## Visual map
-
-**Backend selection is a compatibility decision before a speed decision.**
-
-```blockdiag
-flowchart TB
-    R["Runtime shape and model metadata"] --> S["Backend selector"]
-    S --> A["Attention kernel"]
-    S --> M["Matrix and quantization kernels"]
-    S --> E["Expert kernels"]
-    S --> P["Sampling kernels"]
-    A --> V["Correctness and performance validation"]
-    M --> V
-    E --> V
-    P --> V
-```
-
-**A kernel claim must survive three expanding measurement boundaries.**
-
-```blockdiag
-flowchart LR
-    K["Isolated kernel"] --> S["Complete engine step"]
-    S --> W["Production-shaped workload"]
-    K -. "shape speed" .-> R["Result"]
-    S -. "conversion and launch" .-> R
-    W -. "queue, cache, and goodput" .-> R
-```
-
-The first diagram is a dispatch, and the selector's inputs deserve the
-emphasis: shape and model metadata enter at the top, which means selection is
-deterministic per configuration — the same model on the same device picks the
-same backends every start. The second diagram is an epistemology for
-performance claims: each boundary can invalidate the previous level's
-conclusion, and the dashed edges name what each level fails to see. The table
-below is the same idea as an evidence checklist.
-
-| Level | Includes | Can establish | Cannot establish alone |
-| --- | --- | --- | --- |
-| Kernel | one operation and shapes | local speed and numerical error | scheduler or cache effect |
-| Engine step | metadata and surrounding operations | step critical path | production queue behavior |
-| Workload | arrivals, reuse, output, quality | service goodput | universal hardware ranking |
-
 ## Why fewer operations can mean more speed
 
 Framework code often expresses a calculation as several tensor operations.
@@ -156,6 +114,22 @@ latency than any attention kernel improvement ever will.
 An engine may integrate several attention implementations. Selection can depend
 on device architecture, dtype, head dimension, page size, prefill or decode,
 mask type, graph compatibility, and parallel plan.
+
+**Backend selection is a compatibility decision before a speed decision.**
+
+```blockdiag
+flowchart TB
+    R["Runtime shape and model metadata"] --> S["Backend selector"]
+    S --> A["Attention kernel"]
+    S --> M["Matrix and quantization kernels"]
+    S --> E["Expert kernels"]
+    S --> P["Sampling kernels"]
+    A --> V["Correctness and performance validation"]
+    M --> V
+    E --> V
+    P --> V
+```
+
 
 If a preferred backend does not support one condition, the engine can reject
 the configuration or fall back to another path. Silent fallback is dangerous
@@ -297,6 +271,32 @@ removes unrelated work. It does not show whether the engine can present those
 shapes, whether conversion is needed, or whether the scheduler changes batch
 composition.
 
+**A kernel claim must survive three expanding measurement boundaries.**
+
+```blockdiag
+flowchart LR
+    K["Isolated kernel"] --> S["Complete engine step"]
+    S --> W["Production-shaped workload"]
+    K -. "shape speed" .-> R["Result"]
+    S -. "conversion and launch" .-> R
+    W -. "queue, cache, and goodput" .-> R
+```
+
+The first diagram is a dispatch, and the selector's inputs deserve the
+emphasis: shape and model metadata enter at the top, which means selection is
+deterministic per configuration — the same model on the same device picks the
+same backends every start. The second diagram is an epistemology for
+performance claims: each boundary can invalidate the previous level's
+conclusion, and the dashed edges name what each level fails to see. The table
+below is the same idea as an evidence checklist.
+
+| Level | Includes | Can establish | Cannot establish alone |
+| --- | --- | --- | --- |
+| Kernel | one operation and shapes | local speed and numerical error | scheduler or cache effect |
+| Engine step | metadata and surrounding operations | step critical path | production queue behavior |
+| Workload | arrivals, reuse, output, quality | service goodput | universal hardware ranking |
+
+
 For any proposed kernel change, measure three levels:
 
 1. the isolated operation with representative shapes;
@@ -355,7 +355,7 @@ carried roughly 0.9 ms of launch overhead when every kernel launched eagerly
 from Python, and about 0.2 ms under graph capture — launch cost is real,
 measurable, and shape-dependent. With hundreds of kernels per step, the
 per-launch microseconds sum into a visible fraction of short steps, which is
-why fusion, persistent kernels, and capture (the next chapter's subject) all
+why fusion, persistent kernels, and whole-graph capture all
 attack the same tax from different directions. A kernel that wins 10 percent
 of its own runtime in isolation can lose the step if it forces an extra
 conversion launch around itself; only the step-level boundary sees the
@@ -403,7 +403,3 @@ goodput.
 Write a conditional enablement rule rather than declaring a universal winner.
 See [Appendix G](../appendices/g-worked-solutions.md#8-kernel-evaluation) for the
 worked arithmetic.
-
-Kernels reduce the cost of individual operations. The next chapter looks at a
-different source of overhead: launching and specializing the whole operation
-sequence.

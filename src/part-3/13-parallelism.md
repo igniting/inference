@@ -1,4 +1,4 @@
-# 12. Parallelism as Data Movement
+# 13. Parallelism as Data Movement
 
 A model no longer fits on one GPU. The obvious response is to add another GPU.
 The difficult question is what to split.
@@ -12,7 +12,11 @@ which fabric it moves over. Two plans that partition the same model can differ
 by an order of magnitude in served latency, because they differ in what
 crosses which wire.
 
-## Visual map
+## Start with replication
+
+If the model fits on one device, the simplest scale-out design is replication.
+Each replica holds the complete model and serves independent requests. This is
+data parallelism in its inference form.
 
 **Parallel dimensions split different objects and create different traffic.**
 
@@ -25,30 +29,6 @@ flowchart TB
     M --> E["Expert parallel: experts"]
 ```
 
-**A rank mesh must be mapped onto the physical fabric.**
-
-```blockdiag
-flowchart LR
-    A["Logical TP group 0"] --> I0["Fast-link island 0"]
-    B["Logical TP group 1"] --> I1["Fast-link island 1"]
-    I0 --> N["Inter-node network"]
-    I1 --> N
-    N --> P["Pipeline or replica traffic"]
-```
-
-| Dimension | Partitioned object | Frequent communication | Best first use |
-| --- | --- | --- | --- |
-| Data | requests | little on inference path | model fits and concurrency exists |
-| Tensor | layer computation and weights | layer-frequency collectives | weights do not fit one device |
-| Pipeline | layer ranges | stage activations | slower links or very large models |
-| Context | positions and KV | partial attention results | context state is binding |
-| Expert | expert weights and tokens | dispatch and combine | MoE weight fit and scaling |
-
-## Start with replication
-
-If the model fits on one device, the simplest scale-out design is replication.
-Each replica holds the complete model and serves independent requests. This is
-data parallelism in its inference form.
 
 Replication adds capacity without putting a collective on the critical path of
 one request. It also duplicates weights and fragments warm state across
@@ -248,7 +228,7 @@ all-to-all whose message count scales with tokens × k and whose completion
 time is set by the slowest participant. A hot expert that attracts more than
 its share turns one rank into a straggler for the whole layer; balancing
 expert load is therefore part of the parallelism plan, not just a modeling
-concern, and Chapter 13 walks what it costs.
+concern, and Chapter 14 walks what it costs.
 
 Some deployments replicate or data-parallelize attention while expert layers
 span a larger group. This is often called attention data parallelism. It avoids
@@ -257,11 +237,31 @@ cross-replica exchange.
 
 The model no longer has one parallel size. It has a mesh of dimensions — and
 the expert dimension's traffic is the most irregular of them all, which is
-why Chapter 13 gives it a chapter of its own.
+why Chapter 14 gives it a chapter of its own.
 
 ## Compose a rank mesh
 
 Suppose a deployment has 64 GPUs and chooses:
+
+**A rank mesh must be mapped onto the physical fabric.**
+
+```blockdiag
+flowchart LR
+    A["Logical TP group 0"] --> I0["Fast-link island 0"]
+    B["Logical TP group 1"] --> I1["Fast-link island 1"]
+    I0 --> N["Inter-node network"]
+    I1 --> N
+    N --> P["Pipeline or replica traffic"]
+```
+
+| Dimension | Partitioned object | Frequent communication | Best first use |
+| --- | --- | --- | --- |
+| Data | requests | little on inference path | model fits and concurrency exists |
+| Tensor | layer computation and weights | layer-frequency collectives | weights do not fit one device |
+| Pipeline | layer ranges | stage activations | slower links or very large models |
+| Context | positions and KV | partial attention results | context state is binding |
+| Expert | expert weights and tokens | dispatch and combine | MoE weight fit and scaling |
+
 
 ```text
 data parallel = 4
@@ -410,7 +410,7 @@ intra-node links. Adjust based on your actual link speeds and workload.
 | 30–40B (60–80 GB) | Barely | TP2 or TP4 | Leaves room for KV cache; TP2 on NVLink is nearly free |
 | 65–80B (130–160 GB) | No | TP4 or TP8 | Weights alone need 2–4 GPUs; TP keeps latency low |
 | 140–200B (280–400 GB) | No | PP2 × TP4 or TP8 | Beyond 8 GPUs, cross-node links dictate PP vs. TP |
-| 400B+ MoE (varies) | No | EP across groups | Experts dominate size; see Chapter 13 |
+| 400B+ MoE (varies) | No | EP across groups | Experts dominate size; see Chapter 14 |
 
 These are starting configurations, not answers. Measure at your target
 batch size and context length before committing. The worked example below
@@ -454,7 +454,4 @@ prefill and decode step. Predict phase winners at low and high concurrency.
 
 Include memory fit, collective latency, pipeline bubbles, and failure scope.
 The worked comparison is in
-[Appendix G](../appendices/g-worked-solutions.md#12-two-parallel-plans).
-
-The next chapter focuses on the parallel dimension with the most irregular
-traffic: experts.
+[Appendix G](../appendices/g-worked-solutions.md#13-two-parallel-plans).

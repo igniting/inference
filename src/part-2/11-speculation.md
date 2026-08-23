@@ -1,4 +1,4 @@
-# 11. Speculative and Constrained Decoding
+# 11. Speculative Decoding
 
 Autoregressive generation normally pays for one large-model step per token. If
 a response contains 200 tokens, the target model runs at least 200 serial
@@ -15,7 +15,11 @@ advances no faster than before. The whole discipline is in knowing which
 regime the traffic is in — and in the machinery that keeps a rejected guess
 from corrupting committed state.
 
-## Visual map
+## Draft, verify, accept
+
+The classic method uses a small draft model. The draft proposes a run of tokens.
+The target model evaluates the proposed positions together. An acceptance rule
+keeps a valid prefix of the proposal and corrects the first rejected position.
 
 **Speculative decoding proposes several tokens but commits only verified work.**
 
@@ -30,42 +34,6 @@ flowchart LR
     F --> C
 ```
 
-**A speculation round is a strip of drafts with a rollback point at the first
-rejection.**
-
-```blockdiag
-flowchart LR
-    P["Committed prefix"] --> T1["Draft t+1"] --> T2["Draft t+2"] --> T3["Draft t+3"] --> V{"Verify all positions in one target step"}
-    V -->|"all accepted"| C["Commit through t+3"]
-    V -->|"reject at t+2"| B["Commit through t+1;<br/>t+2 rolls back and resamples"]
-    C --> P
-    B --> P
-```
-
-**Constrained decoding adds parser state to every sampling step.**
-
-```blockdiag
-flowchart LR
-    L["Model logits"] --> M["Grammar or schema mask"]
-    P["Parser state"] --> M
-    M --> S["Sample legal token"]
-    S --> U["Update parser state"]
-    U --> P
-    S --> O["Output stream"]
-```
-
-| Mechanism | Added state | Expected benefit | Common losing case |
-| --- | --- | --- | --- |
-| draft model | draft weights and KV | several accepted tokens per target step | low acceptance or memory pressure |
-| n-gram proposal | prefix index | cheap repeated-text proposals | novel text |
-| grammar mask | parser or automaton state | valid structured output | complex masks or unsupported batching |
-| lookahead slots | reserved cache capacity | stable proposal execution | reduced normal concurrency |
-
-## Draft, verify, accept
-
-The classic method uses a small draft model. The draft proposes a run of tokens.
-The target model evaluates the proposed positions together. An acceptance rule
-keeps a valid prefix of the proposal and corrects the first rejected position.
 
 Where the draft runs is itself a placement decision. On the same device it
 steals compute from the target between steps; on a separate device it adds a
@@ -134,8 +102,8 @@ idle and every speculative token competes with real work. The same proposal
 length that is free for an interactive tier is a tax under high concurrency.
 
 Memory carries a quieter version of the same bet. Before acceptance is known,
-each active sequence needs reserved positions for its proposal — the
-lookahead slots in the visual map's table. At 320 KiB per token, four
+each active sequence needs reserved positions for its proposal — lookahead
+slots the scheduler cannot offer to ordinary decode. At 320 KiB per token, four
 lookahead positions cost about 1.3 MiB per sequence: trivial per request, but
 it is capacity that serves no user when acceptance is low, and the graph
 runner needs buckets covering the padded proposal shapes on top. Speculation's
@@ -157,6 +125,14 @@ profile is a property of the model rather than of a separately chosen draft.
 N-gram and suffix methods search the prompt or recent
 history for repeated continuations. They add little model compute and work well
 on repetitive text, but fail when the continuation is novel.
+
+| Proposer | Extra persistent state | Best fit | Characteristic failure |
+| --- | --- | --- | --- |
+| separate draft model | weights, KV, and draft runtime | broad workloads with a well-matched small model | memory loss or weak acceptance erases the speedup |
+| EAGLE or target-feature drafter | drafter weights and target features | models with compatible trained drafters | integration and backend coverage narrow the deployable set |
+| native MTP heads | checkpoint-provided prediction heads | architectures trained for multi-token prediction | cannot be retrofitted to an arbitrary model |
+| n-gram or suffix | host index or recent tokens | repetitive prompts, code, and templated text | novel continuations produce no useful proposal |
+| proposal tree | branch state and masked verification shapes | several locally plausible continuations | node count expands memory and verification work |
 
 Tree methods propose several branches so the target verifies multiple possible
 continuations. They may improve the chance of advancing and also enlarge the
@@ -230,6 +206,19 @@ whole part has built.
 A fixed proposal length is easy to graph and schedule. It is wasteful when
 acceptance changes.
 
+**A speculation round is a strip of drafts with a rollback point at the first
+rejection.**
+
+```blockdiag
+flowchart LR
+    P["Committed prefix"] --> T1["Draft t+1"] --> T2["Draft t+2"] --> T3["Draft t+3"] --> V{"Verify all positions in one target step"}
+    V -->|"all accepted"| C["Commit through t+3"]
+    V -->|"reject at t+2"| B["Commit through t+1;<br/>t+2 rolls back and resamples"]
+    C --> P
+    B --> P
+```
+
+
 At low batch size, target decode may be memory-bound, making a larger
 verification batch relatively cheap. Under high concurrency, the target is
 already efficient and draft work competes with useful requests. Some prompts
@@ -289,81 +278,11 @@ does the drafter run, and which state crosses the network?
 This is why speculative decoding is a serving algorithm, not a wrapper around
 model calls.
 
-## Constrained generation solves a different problem
+## Constraints change verification
 
-Many applications need output that follows JSON Schema, a regular expression,
-or a grammar. A constrained decoder tracks the grammar state for each sequence
-and masks tokens that would make a valid completion impossible.
+A draft token forbidden by the request's grammar cannot be accepted. Verification must advance model state and parser state in lockstep, then roll both back at the first rejected position. The ordinary and speculative paths therefore need the same legality rule for every proposed token.
 
-The grammar may be compiled into a finite-state representation before decode.
-At each step, the engine determines allowed tokens and applies a mask to the
-logits. Efficient implementations cache grammar states and use bitmasks on the
-GPU.
-
-The mask's size is worth pricing once. A 128k vocabulary needs 128k bits of
-legality per position — 16 KiB as a packed bitmask, about three percent of
-the 512 KB logits row Chapter 5 counted per sequence per step. At batch 64 with
-three speculative positions plus the bonus token, four rows per request is
-4 MiB of masks moving toward the GPU each step: small against the step's
-total traffic, but not free, and produced by CPU-side parser state updates
-that must keep up with the engine's step rate. Compilation has its own cost
-curve: compiling a large JSON Schema can take longer than the first request's
-patience, which is why engines compile at admission time, cache automata
-keyed by schema, and reuse them across requests that share a contract.
-
-Tool and reasoning parsers add streaming semantics. A tool-call argument may be
-incomplete for many tokens before it becomes valid JSON. The API must not emit a
-final event too early, and cancellation must clean up parser state.
-
-The streaming discipline is easiest to see character by character. While the
-model emits the *name* of an argument, no consumer can act; partway through
-its string *value*, every prefix is still syntactically open — a quote has
-not closed, an escape may continue. A well-built streamer therefore emits
-progress events keyed to parser states (argument started, value complete,
-tool call complete), not to raw token arrivals, so a client never renders or
-executes a half-argument. The same state that drives the mask drives the
-events: one automaton, two consumers. Cancellation inherits the discipline —
-a request cancelled mid-argument must release both its grammar automaton and
-any buffered partial event, or the next request reusing pooled state starts
-from someone else's open quote.
-
-Constrained generation and speculation interact. A draft token forbidden by
-the current grammar cannot be accepted. Masking may change proposal quality,
-and verification must use the same constraint state as ordinary decode.
-
-### Guided reading: one bitmask per speculative position
-
-vLLM's `StructuredOutputManager` in
-[`vllm/v1/structured_output/__init__.py`](https://github.com/vllm-project/vllm/tree/5cecfc01375052698823fc401e31518fb32a981e/vllm/v1/structured_output)
-shows where the two halves of this chapter physically meet. The backend is a
-choice — the package carries separate modules for xgrammar, outlines,
-lm-format-enforcer, and a guidance backend — but the batching contract is
-shared, and it is speculation-aware: the manager allocates its bitmask tensor
-as `max_batch_size * (1 + max_num_spec_tokens)` rows, with the comment that
-this is "one for each speculative position, and one more for the bonus
-token." Every draft token needs its own legality check against grammar state
-that does not exist yet, so the masks for a request's proposal are "stored
-inline in the tensor and unpacked by the gpu runner."
-
-Filling those masks is host work with its own budget. The manager fills them
-on a thread pool in chunks of sixteen grammars, but only engages the pool
-when more than 128 structured-output requests are scheduled and no
-speculative tokens are in flight; otherwise it fills serially — the same
-CPU-contention awareness the n-gram proposer showed, from the other side.
-Grammars that finish are not dropped: `_fill_bitmasks` resets finished rows
-to a full mask so a recycled batch index cannot inherit a stale constraint.
-The reasoning-parser hooks (`should_fill_bitmask`,
-`trim_reasoning_for_advance`) handle the streaming case — while a model is
-inside its reasoning
-span, the grammar for the final answer must wait. Chapter 5 counted the
-mask's round trip into the step's latency budget; here is the machinery that
-decides what is in it.
-
-The pinned repositories expose these concerns in vLLM's
-[`structured_output`](https://github.com/vllm-project/vllm/tree/5cecfc01375052698823fc401e31518fb32a981e/vllm/v1/structured_output)
-and SGLang's
-[`constrained`](https://github.com/sgl-project/sglang/tree/e161bd1265a0082478b7f1c09f224a52d315dc71/python/sglang/srt/constrained)
-packages.
+Chapter 22 owns grammar compilation, bitmask construction, reasoning and tool parsers, and structured streaming. The interaction to retain here is narrower: constraint complexity changes verification cost and proposal acceptance, so speculation must be benchmarked with the same schemas production traffic uses.
 
 ## Worked example: acceptance is not speedup
 

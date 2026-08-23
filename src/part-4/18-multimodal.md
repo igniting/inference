@@ -1,4 +1,4 @@
-# 17. Multimodal and Encoder-Heavy Serving
+# 18. Multimodal, Encoder, and Pooling Workloads
 
 A user uploads a 20-second video and asks one short question. The language model
 may generate only ten tokens, yet the request can be far more expensive than a
@@ -14,7 +14,14 @@ pipeline the hard way: CPU saturation from video decoding, an accelerator idle
 while encoders wait behind preprocessing, and cache hits that never happen
 because two stages disagree about what makes two pieces of media "the same."
 
-## Visual map
+## Media begins as untrusted bytes
+
+Images, audio, video, and documents arrive in formats optimized for storage and
+transport. Their decoded representation can be much larger: a few megabytes of
+compressed video may expand into hundreds of full-resolution frames, and a
+document upload may contain many high-resolution pages. Expansion is the attack
+surface as well as the cost. Decompression bombs, malformed codec streams, and
+metadata that lies about dimensions all present themselves as ordinary requests.
 
 **A multimodal request is a pipeline before language decoding begins.**
 
@@ -29,32 +36,6 @@ flowchart LR
     L --> O["Autoregressive output"]
 ```
 
-**Reuse can occur at several boundaries with different identity rules.**
-
-```blockdiag
-flowchart TB
-    M["Stable media identity"] --> C1["Decoded-media cache"]
-    C1 --> C2["Preprocessed-tensor cache"]
-    C2 --> C3["Encoder-output cache"]
-    C3 --> C4["Language-prefix KV cache"]
-    C4 --> Q["New question about same media"]
-```
-
-| Reuse boundary | Saves | Version identity must include | Typical size |
-| --- | --- | --- | --- |
-| decoded media | codec work | content and decoder policy | pixels or samples |
-| preprocessed tensor | resize and normalization | preprocessing configuration | dense input tensor |
-| encoder output | encoder queue and compute | encoder and projection weights | feature sequence |
-| language KV | language prefill | full token and model semantics | per-layer attention state |
-
-## Media begins as untrusted bytes
-
-Images, audio, video, and documents arrive in formats optimized for storage and
-transport. Their decoded representation can be much larger: a few megabytes of
-compressed video may expand into hundreds of full-resolution frames, and a
-document upload may contain many high-resolution pages. Expansion is the attack
-surface as well as the cost. Decompression bombs, malformed codec streams, and
-metadata that lies about dimensions all present themselves as ordinary requests.
 
 The frontend should validate type, byte size, dimensions, duration, frame count,
 and decompression limits before expensive work begins — ideally before the bytes
@@ -184,6 +165,25 @@ after the first question can save still more, but may be tied to the exact
 conversation template. These are distinct cache layers with different reuse
 scopes — the chapter's second diagram — and they fail independently.
 
+**Reuse can occur at several boundaries with different identity rules.**
+
+```blockdiag
+flowchart TB
+    M["Stable media identity"] --> C1["Decoded-media cache"]
+    C1 --> C2["Preprocessed-tensor cache"]
+    C2 --> C3["Encoder-output cache"]
+    C3 --> C4["Language-prefix KV cache"]
+    C4 --> Q["New question about same media"]
+```
+
+| Reuse boundary | Saves | Version identity must include | Typical size |
+| --- | --- | --- | --- |
+| decoded media | codec work | content and decoder policy | pixels or samples |
+| preprocessed tensor | resize and normalization | preprocessing configuration | dense input tensor |
+| encoder output | encoder queue and compute | encoder and projection weights | feature sequence |
+| language KV | language prefill | full token and model semantics | per-layer attention state |
+
+
 Treat privacy carefully. Encoder features can reveal information about the
 original media — they are sufficient to reconstruct coarse image content in
 known attacks — so the same tenant, retention, and deletion policy used for
@@ -195,11 +195,11 @@ bound to encoder weights, projection weights, precision, and preprocessing
 version — so they should evict first among the reusable tiers. Decoded pixels
 are smaller and survive model upgrades: a new vision tower still consumes the
 same decoded frame, so the pixel tier outlives every weight-dependent tier
-above it. Language KV sits under Chapter 15's policies entirely. A model-version
+above it. Language KV sits under Chapter 16's policies entirely. A model-version
 bump therefore cascades *upward* through the diagram: KV entries die, encoder
 outputs die, preprocessed tensors die if normalization changed, decoded pixels
 survive. Deploying that cascade as one invalidation event — rather than letting
-stale tiers answer under new versions — is Chapter 15's identity discipline
+stale tiers answer under new versions — is Chapter 16's identity discipline
 applied to one more cache family.
 
 ### Inside SGLang's encoder cache
@@ -223,8 +223,8 @@ would size-mismatch rank>0's mask (zeros(num_items)) and deadlock TP." Rank 0
 computes hashes and queries `batch_is_exist`; every other rank allocates a zero
 mask and joins the broadcast anyway, because the lookup result crosses the TP
 group as a collective and a rank that skips it desyncs the op sequence — the
-same participation-as-correctness principle as Chapter 13's dummy steps and
-Chapter 15's MIN-all-reduce. Note also who writes: only rank 0 stores to the
+same participation-as-correctness principle as Chapter 14's dummy steps and
+Chapter 16's MIN-all-reduce. Note also who writes: only rank 0 stores to the
 pool and assembles the response embedding; other ranks return `(0, 0, 0, None,
 None)`. Single-writer avoids N copies of the same insert racing through the
 pool.
@@ -237,81 +237,25 @@ own cache write; a following request does. If the process dies between response
 and insert, the recompute simply happens again — an acceptable loss priced
 against putting a D2H copy on the interactive path.
 
-## Separate encoder, prefill, and decode when it pays
+## Apply stage disaggregation to encoder work
 
-An encoder-heavy service can place media encoders in their own worker pool. The
-pool batches media efficiently and sends features to language-prefill workers;
-decode runs in a third pool. This E/P/D topology allows independent scaling and
-hardware selection — encoders want compute, prefill wants bandwidth, decode
-wants capacity — and isolates each stage's queue from the others' bursts. The
-pools scale to different drivers, too: encoder load tracks media volume and is
-indifferent to how many questions get asked about each item, language load
-tracks template-plus-question-plus-feature tokens, and the decode pool tracks
-concurrent output streams. One 20-second upload might feed ten follow-up
-questions; sizing all three pools as one fleet guarantees two of them are wrong
-at any given time. Chapter 14's coupled-queue arithmetic applies unchanged —
-estimate per-stage service time and arrival rate, then size downstream pools so
-upstream output never accumulates faster than it drains.
+Chapter 15 owns the connector protocol, coupled-queue arithmetic, and failure
+state machine for encoder/prefill/decode separation. Multimodal serving
+contributes the request-specific inputs to that decision: decoded-media cost,
+feature size, encoder-cache identity, reuse frequency, and the current encoder
+and language-worker queue ages.
 
-The boundary adds a queue and a transfer, so it wins conditionally. Short,
-uncached media may be faster colocated; long videos or repeated questions
-benefit from separation. Route based on estimated encoder time, feature size,
-cache state, and current queueing — the same hybrid-score reasoning as Chapter
-16, with one more term.
+Short, uncached media often stays colocated because the transfer boundary is
+pure overhead. Long videos, repeated questions over one image, and
+independently scalable encoder bursts can repay a separate pool. Route per
+request from measured encoder time, transfer time, cache state, and queue age;
+do not repeat the generic pool-sizing derivation here.
 
-vLLM documents its disaggregated-encoder design (release-dependent:
-[docs.vllm.ai](https://docs.vllm.ai/en/stable/features/disagg_encoder/)) around
-independent scaling, TTFT isolation, and cross-process reuse. In the pinned
-source, the connector abstraction lives in
-[`ec_connector/base.py`](https://github.com/vllm-project/vllm/blob/5cecfc01375052698823fc401e31518fb32a981e/vllm/distributed/ec_transfer/ec_connector/base.py),
-split into scheduler-side primitives (`check_caches_exist`,
-`update_state_after_alloc`) and worker-side ones (`start_load_caches` — "called
-before `_gather_mm_embeddings`" — plus `save_caches` and `get_finished`). SGLang's
-side of the boundary — the encode servers, receivers, and bootstrap registry —
-lives in the same [`disaggregation`](https://github.com/sgl-project/sglang/tree/e161bd1265a0082478b7f1c09f224a52d315dc71/python/sglang/srt/disaggregation)
-package as the KV path from Chapter 14.
-
-### The deferral contract
-
-What actually happens when features have not arrived yet? Both systems answer
-with a *deferred request*, not a blocked thread. vLLM's `ensure_cache_available`
-returns a boolean with the docstring "False if any items are still in transit
-(request should be deferred)" — the scheduler simply declines to schedule the
-request this step and tries again, exactly the posture of Chapter 12's waiting
-queue, with feature arrival playing the role of KV load completion.
-
-SGLang's receiver makes completeness explicit. Features arrive as parts —
-`calculate_modality_num_parts` splits a mixed-modality request across encoders
-by assignment counts — and `MultiModalEmbeddingData.ready` is `sum(ready_list)
-== num_parts`: a request is schedulable only when every part has landed, from
-whichever encoder held it. Parts carry suffixed identities (`_local_part_N`)
-and the receiver drops arrivals whose original id does not match, warning about
-"ZMQ port reuse" — a stale part from a previous incarnation of the connection
-would otherwise satisfy someone else's `ready`. Fan-out is explicit too: the
-receiver registers `receive_count=self.tp_size`, because every TP rank of the
-language worker needs the features before prefill can begin. The E/P/D
-boundary, in other words, is not just a network hop; it is a distributed
-agreement problem about when a request's inputs exist, solved with the same
-tools as everywhere else in Part III — counted completions, stable identities,
-and defensive drops. Even pool membership is explicit: SGLang's encode path
-runs a bootstrap server where encoder workers *register* their URLs and a health
-loop probes them, so language workers discover encoders through the same
-join/leave/health protocol Chapter 16 requires of any replica — an encoder that
-stops answering probes is routed around before requests pile up behind it.
-
-```blockdiag
-flowchart LR
-    M["Media bytes"] --> EQ["Encoder queue<br/>age ~40 ms"]
-    EQ --> ENC["Encoder pool"] 
-    ENC -->|"features · transfer 12 ms"| PQ["Prefill queue<br/>age ~190 ms"]
-    PQ --> PF["Prefill pool"]
-    PF --> DB["Decode pool<br/>running batch"]
-```
-
-Each pool's queue ages differently — encoder queues fill with megabytes and
-drain in tens of milliseconds, prefill queues with token budgets — which is why
-the pools scale independently and why a single fleet-wide utilization number
-cannot tell you which one is falling behind.
+The official
+[vLLM disaggregated-encoder guide](https://docs.vllm.ai/en/stable/features/disagg_encoder/)
+shows the encoder-to-language connector boundary and cross-process feature
+reuse. Treat its support matrix as release-specific; the cost and ownership
+test above is the durable decision.
 
 ## Not every encoder leads to generation
 
@@ -320,6 +264,17 @@ output after one model pass — no decode loop, no KV cache to manage, a genuine
 different serving regime despite sharing the encoder machinery. Their main
 questions are dynamic batching, padding, pooling, output normalization, and
 latency limits.
+
+**Pooling endpoints finish after projection and must restore item order.**
+
+```blockdiag
+flowchart LR
+    I["Variable-length inputs"] --> B["Shape-aware batch"]
+    B --> E["Encoder"]
+    E --> P["Pooling or token projection"]
+    P --> O["Vectors, labels, or scores"]
+    O --> R["Restore request and item order"]
+```
 
 Reranking shows the regime's characteristic hazard: one query paired with
 hundreds of documents. Flatten pairs into a batch and scores must return to the
@@ -341,6 +296,21 @@ downstream similarity values. Reward models may return one scalar per candidate
 or token-level values. Using a generation-oriented output path without defining
 these semantics creates subtle compatibility errors that surface only when a
 client switches providers.
+
+Padding is endpoint-visible accounting, not an implementation footnote. A
+mean-pooling model must exclude padded positions; a last-token model must agree
+whether "last" means the final non-padding token; a normalized embedding API
+must define whether normalization happens before or after truncation. Rerankers
+must carry both request and document indices through flattening, batching, and
+unflattening so that a scheduler reorder cannot silently permute scores.
+
+The supported model families and task mappings evolve, so use the current
+[vLLM pooling-model documentation](https://docs.vllm.ai/en/latest/models/pooling_models/)
+and [SGLang embedding API](https://docs.sglang.ai/basic_usage/openai_api_embeddings.html)
+as implementation references rather than treating a generation endpoint with
+decode disabled as the specification. A conformance fixture should pin pooling
+method, normalization, truncation side, padding behavior, output shape, and
+item order. Those six fields are the portable contract.
 
 ## Worked example: which cache tier matters?
 
@@ -387,8 +357,4 @@ latency saved per byte, and cache-disabled output equivalence.
 
 Then decide whether a remote encoder with 35 ms feature transfer is worthwhile
 if it removes 80 ms of language-worker queue. See
-[Appendix G](../appendices/g-worked-solutions.md#17-multimodal-first-output-path).
-
-The exercise makes the chapter's main point visible: multimodal inference is a
-pipeline of independently schedulable work. Chapter 18 examines another
-pipeline whose expensive stage repeats over time—diffusion generation.
+[Appendix G](../appendices/g-worked-solutions.md#18-multimodal-first-output-path).

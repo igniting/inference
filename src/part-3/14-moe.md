@@ -1,4 +1,4 @@
-# 13. Serving Mixture-of-Experts Models
+# 14. Serving Mixture-of-Experts Models
 
 In a dense transformer layer, every token follows the same feed-forward
 network. In a mixture-of-experts layer, a router chooses a few expert networks
@@ -15,7 +15,12 @@ step time on routing alone. This chapter walks the dispatch path, prices the
 imbalance, and treats expert placement as what it is operationally: a measured
 feedback loop that moves weights to save per-step time.
 
-## Visual map
+## Follow one token through an MoE layer
+
+Assume the layer has 64 experts and selects two per token. Experts are spread
+across eight GPUs. The router produces expert IDs and weights for every token
+in the batch, so a batch of 8 tokens means 8 hidden vectors in, 16 expert
+executions, and 16 output vectors combined back into 8.
 
 **Each MoE layer dispatches token representations to selected experts.** The
 dispatch boundary is where bytes move; everything left of it is metadata, and
@@ -35,33 +40,6 @@ flowchart LR
     C --> O["Layer output"]
 ```
 
-**Expert load balancing is a measured placement feedback loop.** The loop
-moves weights between steps; a placement only pays for itself if the
-straggler time it removes exceeds the weight movement and cache disturbance it
-causes.
-
-```blockdiag
-flowchart LR
-    X["Router trace"] --> L["Tokens per expert and rank"]
-    L --> P["Candidate placement"]
-    P --> M["Weight movement under new generation"]
-    M --> V["Validate straggler and goodput change"]
-    V --> X
-```
-
-| MoE quantity | Why averages mislead | Better observation |
-| --- | --- | --- |
-| tokens per expert | hot experts hide inside a mean | maximum and distribution per step |
-| rank utilization | one rank gates layer completion | busiest-rank service time |
-| dispatch bytes | topology changes path cost | bytes by source, destination, and link |
-| EPLB gain | movement can exceed saved work | amortization time and goodput |
-
-## Follow one token through an MoE layer
-
-Assume the layer has 64 experts and selects two per token. Experts are spread
-across eight GPUs. The router produces expert IDs and weights for every token
-in the batch, so a batch of 8 tokens means 8 hidden vectors in, 16 expert
-executions, and 16 output vectors combined back into 8.
 
 The runtime then performs four steps:
 
@@ -153,6 +131,28 @@ placement so the maximum falls, and neither drop nor pad.
 The simplest placement gives each expert one owner. Popular experts overload
 their ranks. Replicating selected experts trades additional weight memory for
 more destinations and better balance.
+
+**Expert load balancing is a measured placement feedback loop.** The loop
+moves weights between steps; a placement only pays for itself if the
+straggler time it removes exceeds the weight movement and cache disturbance it
+causes.
+
+```blockdiag
+flowchart LR
+    X["Router trace"] --> L["Tokens per expert and rank"]
+    L --> P["Candidate placement"]
+    P --> M["Weight movement under new generation"]
+    M --> V["Validate straggler and goodput change"]
+    V --> X
+```
+
+| MoE quantity | Why averages mislead | Better observation |
+| --- | --- | --- |
+| tokens per expert | hot experts hide inside a mean | maximum and distribution per step |
+| rank utilization | one rank gates layer completion | busiest-rank service time |
+| dispatch bytes | topology changes path cost | bytes by source, destination, and link |
+| EPLB gain | movement can exceed saved work | amortization time and goodput |
+
 
 | Strategy | Weight memory | Balance mechanism | Choose when |
 | --- | --- | --- | --- |
@@ -417,7 +417,7 @@ that cannot mix old and new mappings within a batch, and decide which layers
 you would move first if the update had to be chunked.
 
 Compare prefill and decode traces and include weight-movement cost. The worked
-placement is in [Appendix G](../appendices/g-worked-solutions.md#13-expert-trace-and-placement).
+placement is in [Appendix G](../appendices/g-worked-solutions.md#14-expert-trace-and-placement).
 
-Expert serving makes phase differences especially pronounced. Chapter 14
+Expert serving makes phase differences especially pronounced. Chapter 15
 generalizes the idea of assigning different stages to different worker pools.

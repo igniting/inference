@@ -24,7 +24,11 @@ request accepted twice, a block table pointing at freed pages, a token
 delivered after cancellation. Servers rarely fail in the middle of a
 component; they fail in the contracts between them.
 
-## Visual map
+## The public request becomes an internal request
+
+The frontend receives the HTTP or RPC message. It authenticates the caller,
+checks the requested model, validates generation parameters, and applies limits
+on input size and output length.
 
 **The engine separates user-facing work from step-critical execution.**
 
@@ -39,50 +43,6 @@ flowchart LR
     G --> A
 ```
 
-**Control messages and bulk data take related but distinct paths.**
-
-```blockdiag
-flowchart TB
-    R["Request record"] --> S["Schedule metadata"]
-    S --> W["Worker command"]
-    W --> C["Completion event"]
-    T["Token tensors"] --> M["Model execution"]
-    K["KV blocks"] <--> M
-    M --> L["Logits and sampled IDs"]
-```
-
-**Overlapped output work needs versions to discard stale results.**
-
-```blockdiag
-flowchart TB
-    A["Step N completes on device"] --> B["Results queued for output processing"]
-    A --> C["Step N+1 launches without waiting"]
-    B --> D{"Request still active under this version?"}
-    C --> D
-    D -->|Yes| E["Apply result and advance state"]
-    D -->|No| F["Discard as stale"]
-```
-
-The first two diagrams divide the server along its stable seam: user-facing
-latency work runs ahead of execution, step-critical work runs behind it, and
-the boundary table below says what must be true at each crossing. The third
-diagram is the price of that separation. Once output processing lags
-execution, results can arrive for requests whose state has already moved on,
-and only a version discipline turns a corruption bug into a discarded
-message.
-
-| Boundary | Control object | Data object | Required invariant |
-| --- | --- | --- | --- |
-| API to engine | request and deadline | token IDs | accepted exactly once |
-| scheduler to worker | step plan | block tables and tensors | metadata matches allocation |
-| worker to output | completion and status | sampled tokens | tokens belong to current step |
-| cleanup | terminal transition | KV and buffers | release after last device user |
-
-## The public request becomes an internal request
-
-The frontend receives the HTTP or RPC message. It authenticates the caller,
-checks the requested model, validates generation parameters, and applies limits
-on input size and output length.
 
 For a chat endpoint, the messages are not yet the model input. A chat template
 turns roles and content into formatted text. A tokenizer converts that text to
@@ -224,6 +184,34 @@ The model runner returns logits or another task-specific result. For text
 generation, the sampler applies temperature, top-k or top-p rules, penalties,
 random state, and output constraints. It selects the next token ID.
 
+**Overlapped output work needs versions to discard stale results.**
+
+```blockdiag
+flowchart TB
+    A["Step N completes on device"] --> B["Results queued for output processing"]
+    A --> C["Step N+1 launches without waiting"]
+    B --> D{"Request still active under this version?"}
+    C --> D
+    D -->|Yes| E["Apply result and advance state"]
+    D -->|No| F["Discard as stale"]
+```
+
+The first two diagrams divide the server along its stable seam: user-facing
+latency work runs ahead of execution, step-critical work runs behind it, and
+the boundary table below says what must be true at each crossing. The third
+diagram is the price of that separation. Once output processing lags
+execution, results can arrive for requests whose state has already moved on,
+and only a version discipline turns a corruption bug into a discarded
+message.
+
+| Boundary | Control object | Data object | Required invariant |
+| --- | --- | --- | --- |
+| API to engine | request and deadline | token IDs | accepted exactly once |
+| scheduler to worker | step plan | block tables and tensors | metadata matches allocation |
+| worker to output | completion and status | sampled tokens | tokens belong to current step |
+| cleanup | terminal transition | KV and buffers | release after last device user |
+
+
 Output processing then updates the request. It checks stop conditions, advances
 a grammar or tool parser, converts token IDs to text, updates usage counters,
 and creates streaming events. When the request finishes or is cancelled, it
@@ -271,6 +259,19 @@ An inference server carries several kinds of traffic between its components.
 Schedules and lifecycle commands are small control messages. Tokens, positions,
 and block tables are metadata. Streamed outputs and metrics flow back toward
 the frontend. KV blocks and encoder embeddings are bulk data.
+
+**Control messages and bulk data take related but distinct paths.**
+
+```blockdiag
+flowchart TB
+    R["Request record"] --> S["Schedule metadata"]
+    S --> W["Worker command"]
+    W --> C["Completion event"]
+    T["Token tensors"] --> M["Model execution"]
+    K["KV blocks"] <--> M
+    M --> L["Logits and sampled IDs"]
+```
+
 
 Using the same channel for all four creates problems. A large state transfer can
 delay a cancellation command. A serialization format designed for convenient
@@ -421,6 +422,3 @@ path; draw tokens, tensors, block tables, and logits on the data path.
 Mark every CPU/GPU and process/process wait. For each, state the invariant or
 classify it as an overlap candidate. The worked classification is in
 [Appendix G](../appendices/g-worked-solutions.md#5-control-and-data-paths).
-
-The most important wait sits inside the scheduler. Chapter 6 examines how it
-decides which requests move forward.

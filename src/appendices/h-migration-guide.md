@@ -8,7 +8,7 @@ interaction effects.
 
 Each entry names the optimization, the chapter that explains it, the
 expected impact, the risk, and a concrete evaluation step. Do not apply
-them all at once. Apply one, measure with Chapter 22's method, confirm the
+them all at once. Apply one, measure with Chapter 23's method, confirm the
 result, and then evaluate the next.
 
 ## Phase 1: Free or near-free wins
@@ -31,7 +31,7 @@ blocking decode steps. Typical improvement is 2–5x reduction in tail ITL.
 slightly for very long prompts. Measure both TTFT and ITL.
 
 **Evaluation:** Run your workload with and without chunked prefill at
-your current load. Compare p50 and p99 for both TTFT and ITL. Chapter 22b's
+your current load. Compare p50 and p99 for both TTFT and ITL. Appendix I's
 first walkthrough demonstrates this measurement.
 
 ### 1.2 Enable prefix caching (Chapter 7)
@@ -95,7 +95,7 @@ Set `max-num-seqs` to a value where steady-state KV occupancy stays below
 85% of available blocks.
 
 **Expected impact:** Eliminates preemption storms — the most common cause
-of unexplained latency spikes. Chapter 22b's first walkthrough shows a
+of unexplained latency spikes. Appendix I's first walkthrough shows a
 preemption storm reducing effective throughput by 40%.
 
 **Risk:** Setting too low wastes capacity. Setting too high causes
@@ -119,7 +119,7 @@ steps become 10–20% faster. Uncaptured shapes fall back to eager mode,
 which shows as occasional latency spikes.
 
 **Risk:** Each graph consumes GPU memory (typically 100–300 MB per bucket
-shape). Too many buckets can eat into KV headroom. Chapter 22b's second
+shape). Too many buckets can eat into KV headroom. Appendix I's second
 walkthrough shows graph pool growth causing OOM.
 
 **Evaluation:** Monitor reserved versus allocated CUDA memory. A growing
@@ -150,12 +150,12 @@ and latency at your operating load.
 
 These changes affect the deployment topology and require more planning.
 
-### 3.1 Tensor parallelism sizing (Chapter 12)
+### 3.1 Tensor parallelism sizing (Chapter 13)
 
 **Default state:** Many deployments default to TP matching GPU count
 without evaluating whether fewer ranks would suffice.
 
-**What to do:** Use Chapter 12's quick reference table. If your quantized
+**What to do:** Use Chapter 13's quick reference table. If your quantized
 model fits on fewer GPUs, test a narrower TP degree with the freed GPUs
 running as replicas instead.
 
@@ -168,7 +168,7 @@ headroom. Measure at peak batch size, not empty.
 
 **Evaluation:** Compare per-request latency and fleet throughput at
 TP_N versus TP_{N/2} with 2× replicas. The winner depends on your
-batch sizes — Chapter 12's worked example shows the analysis.
+batch sizes — Chapter 13's worked example shows the analysis.
 
 ### 3.2 Speculative decoding (Chapter 11)
 
@@ -187,10 +187,10 @@ workload-dependent — creative generation accepts fewer tokens than
 formulaic tasks.
 
 **Evaluation:** Enable speculation on a staging deployment and measure
-acceptance rate, TPOT, and total throughput. Appendix D2's speculative
+acceptance rate, TPOT, and total throughput. Appendix D's speculative
 decoding checklist gives the thresholds.
 
-### 3.3 Prefill/decode disaggregation (Chapter 14)
+### 3.3 Prefill/decode disaggregation (Chapter 15)
 
 **Default state:** Colocated prefill and decode on the same workers.
 
@@ -204,7 +204,7 @@ becomes independent of prefill load. Meaningful only when long-prompt
 interference is measurable.
 
 **Risk:** Adds a transfer boundary, a second pool to scale, and coupled
-queue dynamics. The transfer itself costs time — Chapter 14 prices it
+queue dynamics. The transfer itself costs time — Chapter 15 prices it
 at ~35 ms for a typical sequence. Short prompts may not repay this.
 
 **Evaluation:** Measure ITL percentiles during mixed prefill/decode
@@ -213,37 +213,37 @@ load. If ITL variance drops significantly with chunked prefill alone
 
 ## Phase 4: Multi-tenant and scale-out
 
-### 4.1 Adapter-aware routing (Chapter 11b)
+### 4.1 Adapter-aware routing (Chapter 12)
 
 **Applies if:** You serve multiple LoRA adapters.
 
 **What to do:** Configure adapter-aware routing that scores both load
-and adapter locality. Chapter 11b's worked example shows the routing
+and adapter locality. Chapter 12's worked example shows the routing
 score formula.
 
 **Expected impact:** Reduces cold adapter loads by 4–5x compared to
 round-robin. Each cold load costs host-to-device transfer time.
 
-### 4.2 Distributed caching (Chapter 15)
+### 4.2 Distributed caching (Chapter 16)
 
 **Applies if:** You have multiple replicas and significant prefix overlap
 across them.
 
-**What to do:** Evaluate cache-aware routing first (Chapter 16) before
+**What to do:** Evaluate cache-aware routing first (Chapter 17) before
 adding a distributed cache layer. Routing is simpler and often captures
 most of the value.
 
 **Expected impact:** Depends entirely on your prefix reuse pattern.
 Measure cross-replica overlap before building infrastructure.
 
-### 4.3 Autoscaling tuning (Chapter 23)
+### 4.3 Autoscaling tuning (Chapter 24)
 
 **What to do:** Scale on queue depth or waiting-request count, not GPU
 utilization. GPU utilization is a trailing indicator that can read high
 while requests queue.
 
 **Expected impact:** Faster scale-up response to demand spikes. Appendix
-D2's autoscaling checklist gives the configuration procedure.
+Appendix D's autoscaling checklist gives the configuration procedure.
 
 ## Evaluation order summary
 
