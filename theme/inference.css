@@ -552,7 +552,7 @@ code {
   aspect-ratio: 18 / 19;
   background: url("../assets/cover-system-map.svg") center / contain no-repeat;
   content: "";
-  opacity: 0.58;
+  opacity: 0.68;
   transform: translateY(-50%);
 }
 
@@ -601,7 +601,11 @@ code {
 }
 
 .content main .book-cover .cover-author {
-  margin: 34px 0 0;
+  position: absolute;
+  z-index: 1;
+  bottom: clamp(26px, 5vh, 48px);
+  left: 10px;
+  margin: 0;
   color: var(--signal-deep);
   font-family: var(--utility-font);
   font-size: 14px;
@@ -880,15 +884,15 @@ main a.xref {
   .book-cover::before {
     right: -120px;
     width: min(94%, 650px);
-    opacity: 0.34;
+    opacity: 0.54;
   }
 
   .book-cover::after {
     background: linear-gradient(
       90deg,
       var(--bg) 0%,
-      color-mix(in srgb, var(--bg) 96%, transparent) 55%,
-      color-mix(in srgb, var(--bg) 45%, transparent) 100%
+      color-mix(in srgb, var(--bg) 94%, transparent) 45%,
+      color-mix(in srgb, var(--bg) 28%, transparent) 100%
     );
   }
 }
@@ -921,16 +925,22 @@ main a.xref {
     right: -230px;
     width: 640px;
     max-width: none;
-    opacity: 0.25;
+    opacity: 0.48;
   }
 
   .book-cover::after {
     background: linear-gradient(
       90deg,
       var(--bg) 0%,
-      color-mix(in srgb, var(--bg) 95%, transparent) 64%,
-      color-mix(in srgb, var(--bg) 52%, transparent) 100%
+      color-mix(in srgb, var(--bg) 92%, transparent) 42%,
+      color-mix(in srgb, var(--bg) 58%, transparent) 63%,
+      transparent 100%
     );
+  }
+
+  .content main .book-cover .cover-author {
+    bottom: 26px;
+    left: 6px;
   }
 
   .content main .book-cover h1 {
