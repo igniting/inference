@@ -47,16 +47,8 @@ Features on a development branch are evidence of a design under active use or
 investigation, not a promise of universal support. Every deployment must verify
 its exact model, device, precision, backend, and release.
 
-## What this book is not
-
-It is not a rewritten edition of another author's work. Existing books can
-reveal which questions readers care about, but the structure, explanations,
-diagrams, examples, and exercises here were developed independently from
-primary sources and implementation study. The project policy at the back of
-the book explains how claims and sources are handled.
-
-It is also not a list of optimization switches. Switches age quickly. The
-questions behind them are durable:
+Specific optimization switches age quickly, so the book builds its method
+around questions that remain useful as implementations change:
 
 - Which resource is saturated?
 - Which state must persist, and who owns it?
@@ -66,8 +58,8 @@ questions behind them are durable:
 - What correctness contract is being preserved?
 - Which measurement would falsify the proposed improvement?
 
-Chapter 1 turns these questions into an execution plan, and the worksheet in
-How to Read This Book turns them into an evidence checklist.
+Chapter 1 turns these questions into an execution plan. The worksheet in
+[How to Read This Book](how-to-read.md) turns them into an evidence checklist.
 
 ## The contract with the reader
 
