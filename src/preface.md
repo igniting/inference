@@ -48,12 +48,12 @@ Requests have different input lengths, finish at different times, and grow
 their memory footprint while running. A static batch is a poor fit for that
 shape of work.
 
+**A short history of generative-model serving.**
+
 ```blockdiag
 flowchart LR
-    A["2016–17<br/>Model serving<br/>and batching"] --> B["2017<br/>Transformer<br/>architecture"]
-    B --> C["2022<br/>Iteration-level<br/>scheduling"]
-    C --> D["2023<br/>Paged KV<br/>memory"]
-    D --> E["2024<br/>Structured programs<br/>and prefix reuse"]
+    A["2016–2017: model serving and Transformers"] --> B["2022–2023: continuous scheduling and paged KV memory"]
+    B --> C["2024: structured programs and prefix reuse"]
 ```
 
 In 2022, [Orca](https://www.usenix.org/conference/osdi22/presentation/yu)
