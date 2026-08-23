@@ -25,6 +25,127 @@ made at three different speeds, the state that must be protected along the
 way, and the trap of improving one part while the service gets worse. Every
 later chapter zooms into one region of this map.
 
+We will build that map from running systems, not from an abstract architecture.
+The two implementations followed throughout this book are vLLM and SGLang.
+Their names and process boundaries differ, but both have to turn an incoming
+request into scheduled GPU work and an ordered stream of output. Start with
+their code paths; the vocabulary in the rest of the chapter will then name
+things you have already seen.
+
+## Meet the two engines
+
+This edition studies fixed source snapshots so that a link continues to mean
+the same thing as the prose beside it: vLLM at
+[`5cecfc0`](https://github.com/vllm-project/vllm/tree/5cecfc01375052698823fc401e31518fb32a981e)
+and SGLang at
+[`e161bd1`](https://github.com/sgl-project/sglang/tree/e161bd1265a0082478b7f1c09f224a52d315dc71).
+Do not try to memorize either repository. Learn to recognize the same six
+duties in both: accept a request, prepare it, admit it, schedule it, execute
+it, and return its output.
+
+### A first map of vLLM
+
+The shortest useful route through vLLM begins at its asynchronous engine
+interface, crosses a process boundary, and ends at the GPU model runner.
+
+**A vLLM request crosses three major ownership boundaries.**
+
+```blockdiag
+flowchart LR
+    A["OpenAI API and AsyncLLM"] --> B["EngineCore and Scheduler"]
+    B --> C["Executor and GPUModelRunner"]
+    C --> B
+    B --> A
+```
+
+Use this source map on a first reading. The goal is to know where to resume
+when a trace or metric points at one stage.
+
+| Duty | Source anchor | What to notice |
+| --- | --- | --- |
+| Accept HTTP requests | [`entrypoints/openai/api_server.py`](https://github.com/vllm-project/vllm/blob/5cecfc01375052698823fc401e31518fb32a981e/vllm/entrypoints/openai/api_server.py) | The protocol server creates and borrows an asynchronous engine client; HTTP handling is outside the engine core. |
+| Prepare and track a request | [`v1/engine/async_llm.py`](https://github.com/vllm-project/vllm/blob/5cecfc01375052698823fc401e31518fb32a981e/vllm/v1/engine/async_llm.py) | `AsyncLLM.generate` creates a per-request output stream, processes the input, registers detokenization state, and submits the request. |
+| Cross into the engine process | [`v1/engine/core_client.py`](https://github.com/vllm-project/vllm/blob/5cecfc01375052698823fc401e31518fb32a981e/vllm/v1/engine/core_client.py) | `EngineCoreClient` is the transport seam between asynchronous callers and the engine core. |
+| Admit and advance work | [`v1/engine/core.py`](https://github.com/vllm-project/vllm/blob/5cecfc01375052698823fc401e31518fb32a981e/vllm/v1/engine/core.py) | `add_request` hands work to the scheduler; `step` schedules, executes, handles aborts, and applies results. |
+| Choose tokens and KV blocks | [`v1/core/sched/scheduler.py`](https://github.com/vllm-project/vllm/blob/5cecfc01375052698823fc401e31518fb32a981e/vllm/v1/core/sched/scheduler.py) and [`v1/core/kv_cache_manager.py`](https://github.com/vllm-project/vllm/blob/5cecfc01375052698823fc401e31518fb32a981e/vllm/v1/core/kv_cache_manager.py) | The scheduler spends a token budget; the KV-cache manager finds reusable blocks and allocates new ones. |
+| Execute the model | [`v1/executor/abstract.py`](https://github.com/vllm-project/vllm/blob/5cecfc01375052698823fc401e31518fb32a981e/vllm/v1/executor/abstract.py) and [`v1/worker/gpu/model_runner.py`](https://github.com/vllm-project/vllm/blob/5cecfc01375052698823fc401e31518fb32a981e/vllm/v1/worker/gpu/model_runner.py) | The executor hides worker topology; `GPUModelRunner.execute_model` updates device-side request state and runs the selected model path. |
+
+Follow one generation request in that order. The API layer calls
+`AsyncLLM.generate`. That method's own documentation describes the handoff:
+create an output stream, prepare the input, add detokenization state, then
+submit to an `EngineCore` running separately. `EngineCoreClient` carries that
+message across the process or transport boundary. `EngineCore.add_request`
+places the request under scheduler ownership.
+
+The repeated serving loop is visible in `EngineCore.step`. It asks
+`Scheduler.schedule` for the next work, calls the executor's `execute_model`,
+drains cancellation requests, and gives completed model output back to the
+scheduler. The model runner updates request state and KV block tables before
+dispatching the model. Results travel in the opposite direction: engine
+outputs reach `AsyncLLM`'s background output handler, which feeds the stream
+belonging to the original caller. A request therefore does not live in one
+function. It changes owners at explicit seams.
+
+### A first map of SGLang
+
+SGLang exposes the same duties through a different split. Its
+`TokenizerManager` is a substantial request-side manager, while its
+`Scheduler` owns a long-running event loop and communicates with a tensor-
+parallel model worker.
+
+**An SGLang request moves from a frontend manager into a scheduler process.**
+
+```blockdiag
+flowchart LR
+    A["HTTP server and TokenizerManager"] --> B["Scheduler and memory pools"]
+    B --> C["TpModelWorker and ModelRunner"]
+    C --> B
+    B --> A
+```
+
+| Duty | Source anchor | What to notice |
+| --- | --- | --- |
+| Accept HTTP requests | [`entrypoints/http_server.py`](https://github.com/sgl-project/sglang/blob/e161bd1265a0082478b7f1c09f224a52d315dc71/python/sglang/srt/entrypoints/http_server.py) | `generate_request` turns streaming results from the tokenizer manager into server-sent events and attaches cancellation behavior. |
+| Validate, tokenize, and await output | [`managers/tokenizer_manager.py`](https://github.com/sgl-project/sglang/blob/e161bd1265a0082478b7f1c09f224a52d315dc71/python/sglang/srt/managers/tokenizer_manager.py) | `TokenizerManager.generate_request` normalizes and validates input, tokenizes it, sends it onward, and waits on request-specific state. |
+| Admit and schedule work | [`managers/scheduler.py`](https://github.com/sgl-project/sglang/blob/e161bd1265a0082478b7f1c09f224a52d315dc71/python/sglang/srt/managers/scheduler.py) | `handle_generate_request` creates the scheduler's request object; `run_event_loop` repeatedly receives, batches, launches, and processes work. |
+| Own reusable token state | [`mem_cache/radix_cache.py`](https://github.com/sgl-project/sglang/blob/e161bd1265a0082478b7f1c09f224a52d315dc71/python/sglang/srt/mem_cache/radix_cache.py) and [`mem_cache/memory_pool.py`](https://github.com/sgl-project/sglang/blob/e161bd1265a0082478b7f1c09f224a52d315dc71/python/sglang/srt/mem_cache/memory_pool.py) | The radix cache indexes reusable prefixes; the pools map requests and token positions to KV storage. |
+| Execute and sample | [`managers/tp_worker.py`](https://github.com/sgl-project/sglang/blob/e161bd1265a0082478b7f1c09f224a52d315dc71/python/sglang/srt/managers/tp_worker.py) and [`model_executor/model_runner.py`](https://github.com/sgl-project/sglang/blob/e161bd1265a0082478b7f1c09f224a52d315dc71/python/sglang/srt/model_executor/model_runner.py) | `forward_batch_generation` builds a forward batch, invokes the model runner, and samples a next token on the final pipeline rank. |
+| Convert tokens back to text | [`managers/detokenizer_manager.py`](https://github.com/sgl-project/sglang/blob/e161bd1265a0082478b7f1c09f224a52d315dc71/python/sglang/srt/managers/detokenizer_manager.py) | The detokenizer manager maintains incremental decode state and sends text results toward the tokenizer manager. |
+
+Trace the code from `http_server.generate_request`. It delegates to
+`TokenizerManager.generate_request`, which normalizes the request, creates
+request state, validates adapter selection, tokenizes input, sends the
+tokenized object to the scheduler, and awaits responses. In the scheduler,
+`handle_generate_request` constructs the internal `Req` object. The event loop
+then receives pending work, chooses a batch, calls `run_batch`, and processes
+the result.
+
+The model-facing half begins in `TpModelWorker.forward_batch_generation`.
+It constructs a `ForwardBatch`, calls `ModelRunner.forward`, and samples when
+the worker owns the final pipeline stage. Back in the scheduler,
+`process_batch_result` updates request progress and publishes a load snapshot
+that a router can consume. Output token IDs pass through
+`DetokenizerManager` before the frontend yields text to the HTTP stream. As in
+vLLM, cancellation, memory release, and output delivery cross several owners;
+closing the network connection cannot safely erase them all at once.
+
+### The same duties, different boundaries
+
+The comparison is more useful than either directory tree alone:
+
+| Serving duty | vLLM | SGLang |
+| --- | --- | --- |
+| Request-side orchestration | `AsyncLLM` | `TokenizerManager` |
+| Admission and repeated step | `EngineCore` plus `Scheduler` | `Scheduler` event loop |
+| Prefix and KV ownership | `KVCacheManager` and block tables | radix cache and memory pools |
+| Model execution | executor plus `GPUModelRunner` | `TpModelWorker` plus `ModelRunner` |
+| Incremental output | async output handler and detokenizer state | `DetokenizerManager` and tokenizer-manager state |
+
+Neither arrangement is the universal architecture. The important fact is
+that both must assign the same duties and preserve state while ownership
+changes. The rest of this chapter gives those duties portable names. Later
+chapters return to these exact files and descend one level at a time.
+
 ## From model call to serving system
 
 It is useful to begin with a simple request life cycle:
@@ -338,63 +459,6 @@ arithmetic, in Chapters 16, 6, 12, and 10.
 
 The lesson is not that local optimization is bad. It is that the unit of
 success is the service objective under a realistic workload.
-
-## Seeing the same duties in real engines
-
-vLLM and SGLang organize their code differently, but both must perform the
-request life cycle described in this chapter. This is a first visit: we locate
-the duties and note what to ask of each file. Chapter 5 tours the internal
-anatomy properly.
-
-At the source revisions used for this edition, vLLM concentrates the
-per-process engine in one class, `EngineCore`, in
-[`vllm/v1/engine/core.py`](https://github.com/vllm-project/vllm/blob/5cecfc01375052698823fc401e31518fb32a981e/vllm/v1/engine/core.py).
-A productive reading order:
-
-1. Start at `add_request`, the doorway every request passes through, and
-   note that it accepts an already-validated request plus a wave marker:
-   validation happened upstream, in the API layer.
-2. Read `step`, whose return value is a mapping from client identifiers to
-   output bundles. One engine core serves several connected clients, and that
-   dictionary is the seam where fan-out happens.
-3. Continue to `step_with_batch_queue`, which keeps a second batch prepared
-   while the first executes. The CPU-ahead-of-GPU overlap discussed above
-   appears here as ordinary code.
-4. Finish with `_process_aborts_queue`: cancellation requests arrive through
-   a queue drained between steps, confirming that aborting is a scheduled
-   transition rather than an interrupt.
-
-Around `step` sits a cluster of maintenance entries: pausing and resuming the
-scheduler, sleeping and waking the worker, resetting caches. These are the
-control and management planes entering through the same object, at their own
-cadence.
-
-SGLang distributes the same duties differently in
-[`managers/scheduler.py`](https://github.com/sgl-project/sglang/blob/e161bd1265a0082478b7f1c09f224a52d315dc71/python/sglang/srt/managers/scheduler.py).
-Its constructor calls a long sequence of `init_` methods — memory pools,
-schedule policy, chunked prefill, disaggregation, overlap — so the class
-visibly assembles the concerns this chapter listed separately. Two details
-reward attention. First, `run_event_loop` chooses between
-`event_loop_normal` and `event_loop_overlap` at startup: overlapping
-scheduling with execution is a configuration decision, not a runtime
-adaptation. Second, `publish_load_snapshot` emits the scheduler's load for
-routers to consume: data-plane evidence feeding a control-plane decision,
-exactly the arrow in the second diagram.
-
-The names matter less than the questions they let us answer. Where does the
-authoritative request state live? Which component owns allocation? Can output
-processing overlap the next GPU step? Which process notices a dead worker?
-These links point to the exact snapshots studied for this book. They are
-examples of current design, not permanent APIs.
-
-The two organizations also preview a trade worth holding in mind.
-Concentrating duties in one class makes the data path easy to follow but
-concentrates state; assembling duties from initialized parts makes each
-concern replaceable but scatters ownership across objects. Neither is wrong,
-and later chapters will point at specific files rather than argue for one
-style. What matters for now is that both engines confirm the chapter's map:
-validation upstream, scheduling at the center, overlap as an explicit
-choice, and cancellation as scheduled work.
 
 ## Worked example: the cache hit that loses
 
