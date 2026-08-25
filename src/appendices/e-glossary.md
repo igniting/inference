@@ -81,6 +81,9 @@ per active sequence per ordinary engine step.
 **Decode-context parallelism (DCP)** — Partitioning decode context or KV state
 by sequence position and combining partial attention results.
 
+**Degradation ladder** — A structured sequence of service reductions applied
+under overload, ordered from least to most visible impact on the user.
+
 **Disaggregation** — Placing model stages, such as prefill and decode, in
 separate worker pools with explicit intermediate transfer.
 
@@ -96,11 +99,19 @@ and output update. Some chapters use "model step" for the same cycle.
 capacity under a retention policy. Distinct from preemption, which removes
 running work, and from swapping, which moves a suspended request's state.
 
+**Execution identity** — The combination of model version, processor
+configuration, and cache-relevant parameters that determines whether cached
+state is valid for a given request.
+
 **Expert parallelism (EP)** — Distributing different MoE experts across ranks
 and routing token representations to their owners.
 
 **Expert-parallel load balancing (EPLB)** — Changing expert placement or
 replication based on observed routing load.
+
+**Generation fence** — A monotonic version counter on a session or request that
+invalidates late-arriving work from a superseded generation, preventing stale
+results from reaching the output stream.
 
 **Goodput** — Completed work per time that satisfies a stated latency,
 correctness, quality, and error contract.
@@ -137,6 +148,10 @@ weights are merged or applied alongside the base model's forward pass.
 
 **Management plane** — Deployment and policy systems that change the service's
 configuration, software, model, or capacity.
+
+**Membership epoch** — A versioned snapshot of which workers belong to a
+distributed group. Stale membership information self-invalidates when the
+epoch advances, preventing routing to departed or unhealthy members.
 
 **Model runner** — The engine component that prepares device tensors and
 invokes model code, kernels, graphs, and collectives for a scheduled step.
@@ -185,6 +200,11 @@ between registered memory regions with reduced CPU involvement.
 **Reduce-scatter** — A collective that reduces values and leaves a different
 shard of the result on each rank.
 
+**Release identity** — The pinned combination of model weights, tokenizer,
+chat template, grammar backend, runtime image, and configuration that
+uniquely identifies a deployment version. Changes to any component require
+re-running conformance and benchmark suites.
+
 **Request goodput** — Requests completed within a specified service and quality
 contract per unit time.
 
@@ -206,6 +226,10 @@ availability, correctness, quality, or another service property.
 
 **Session affinity** — Routing related turns or events to the same worker to
 preserve local state.
+
+**Sleep level** — A graduated resource-release mode used when an inference
+worker yields capacity to a trainer or autoscaler. Deeper levels release more
+resources (KV state, then weights from device memory) and cost more to resume.
 
 **Speculative decoding** — Proposing future tokens with a cheaper method and
 verifying them with the target model so one target step may advance several

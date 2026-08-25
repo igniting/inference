@@ -209,7 +209,12 @@ instead of producing tokens at all. The stages survive, but their costs move.
 For this reason, a request is better understood as a small workflow than as
 one model invocation.
 
-The precise single-request timeline belongs to Chapter 0. At this level, retain only the ownership map: the API owns validation, the router owns placement, the engine owns admitted work, and the output path owns ordered delivery. Load changes the time spent at those boundaries without changing the model itself. Chapter 2 names the resulting latency populations; Chapters 5 and 6 implement the engine boundaries and scheduling decisions.
+The precise single-request timeline belongs to Chapter 0. At this level,
+retain only the ownership map: the API owns validation, the router owns
+placement, the engine owns admitted work, and the output path owns ordered
+delivery. Load changes the time spent at those boundaries without changing
+the model itself. Chapter 2 names the resulting latency populations;
+Chapters 5 and 6 implement the engine boundaries and scheduling decisions.
 
 ## Three kinds of decisions
 

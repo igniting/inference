@@ -39,7 +39,7 @@ made model lifecycle management and high-performance serving first-class
 concerns.
 
 The workload changed as the models changed. The
-[Transformer](https://papers.neurips.cc/paper/7181-attention-isall-you-need.pdf),
+[Transformer](https://papers.neurips.cc/paper/7181-attention-is-all-you-need.pdf),
 introduced in 2017, made attention the foundation of a highly parallel model
 architecture. Large generative models built on that architecture do not simply
 run once per request. They first process an input and then repeatedly execute
