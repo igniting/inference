@@ -7,3 +7,4 @@
 /critique.md
 /benchmark_cache/
 /benchmark_results/
+__pycache__/
