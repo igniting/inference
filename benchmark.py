@@ -1160,17 +1160,28 @@ def print_cascade_report(all_results: list[BlameResult], traces: list[Trace]):
     print("  " + "=" * 95)
     print("  Strategy: Run LLM Judge first. If confidence < threshold, escalate to expensive methods.")
 
-    for threshold in [0.5, 0.7, 0.85]:
-        judge_results = [r for r in all_results if r.method == "LLM Judge" and r.run_id == 0]
+    # Show Judge confidence distribution
+    judge_r0 = [r for r in all_results if r.method == "LLM Judge" and r.run_id == 0]
+    if judge_r0:
+        print(f"\n  Judge confidence distribution:")
+        for r in sorted(judge_r0, key=lambda x: x.confidence):
+            icon = "v" if r.correct else "X"
+            print(f"    {icon} {r.trace_name:<24} conf={r.confidence:.2f} pred=step {r.predicted_culprit}")
+
+    print(f"\n  {'Threshold':>10} {'Accuracy':>10} {'95% CI':>14} {'Calls Saved':>12} {'Escalated':>10}")
+    print("  " + "-" * 60)
+
+    for threshold in [0.5, 0.7, 0.85, 0.90, 0.95]:
         escalation_methods = ["Hindsight Critic", "Counterfactual Replay", "RPA (Novel)"]
 
         cascade_correct = 0
         cascade_total = 0
         calls_saved = 0
         total_possible_calls = 0
+        escalated_traces = []
 
         for trace in traces:
-            jr = next((r for r in judge_results if r.trace_name == trace.task_name), None)
+            jr = next((r for r in judge_r0 if r.trace_name == trace.task_name), None)
             if not jr:
                 continue
             cascade_total += 1
@@ -1180,6 +1191,7 @@ def print_cascade_report(all_results: list[BlameResult], traces: list[Trace]):
                 cascade_correct += int(jr.correct)
                 calls_saved += len(escalation_methods)
             else:
+                escalated_traces.append(trace.task_name)
                 escalation_results = [r for r in all_results if r.method in escalation_methods
                                       and r.trace_name == trace.task_name and r.run_id == 0]
                 if escalation_results:
@@ -1194,8 +1206,12 @@ def print_cascade_report(all_results: list[BlameResult], traces: list[Trace]):
         if cascade_total:
             pct_saved = calls_saved / total_possible_calls if total_possible_calls else 0
             lo, hi = wilson_ci(cascade_correct, cascade_total)
-            print(f"\n  Threshold={threshold:.2f}: {cascade_correct}/{cascade_total}={cascade_correct/cascade_total:.0%} "
-                  f"[{lo:.0%}-{hi:.0%}] | API calls saved: {pct_saved:.0%}")
+            n_esc = len(escalated_traces)
+            print(f"  {threshold:>10.2f} {cascade_correct}/{cascade_total}={cascade_correct/cascade_total:.0%}"
+                  f" [{lo:.0%}-{hi:.0%}] {pct_saved:>11.0%} {n_esc:>9}")
+
+    print("\n  Insight: Judge confidence is poorly calibrated — it reports 0.85 even on its")
+    print("  only error (adv_red_herring). No practical threshold separates correct from incorrect.")
 
 
 # ============================================================
@@ -1350,7 +1366,7 @@ def print_paper_table(all_results: list[BlameResult], traces: list[Trace]):
         if not trace:
             continue
 
-        if trace.is_adversarial and trace.adversarial_type == "red_herring":
+        if trace.is_adversarial and "red_herring" in trace.adversarial_type:
             cat = "surface-confusion"
         elif trace.is_adversarial and trace.adversarial_type == "multi_fault":
             cat = "multi-fault-collapse"

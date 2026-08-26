@@ -241,7 +241,23 @@ Late-position faults are significantly harder for CF Replay, Judge, and Hindsigh
 
 Majority vote across all 5 methods achieves 93% accuracy (14/15), failing only on `adv_red_herring` where 3 methods predicted step 3 vs 2 correct for step 4. Consensus is weaker than RPA alone (93% vs 100%).
 
-### 5.6 Error Analysis
+### 5.6 Cascaded Credit Assignment
+
+We test a cascade approach: run the cheapest method (LLM Judge) first, then escalate to expensive methods only when confidence is low.
+
+| Threshold | Accuracy | Calls Saved | Escalated |
+|-----------|----------|-------------|-----------|
+| 0.50 | 93% | 75% | 0 |
+| 0.70 | 93% | 75% | 0 |
+| 0.85 | 93% | 75% | 0 |
+| 0.90 | 93% | 62% | 2 |
+| 0.95 | 93% | 25% | 10 |
+
+**Key finding**: The cascade approach fails to improve accuracy because the Judge's confidence is poorly calibrated. It reports 0.85 confidence even on its only error (`adv_red_herring`). No practical threshold separates correct predictions from incorrect ones. Moreover, even when escalation triggers, the majority vote among escalation methods (Hindsight + CF + RPA) is 2-1 for step 3 (wrong) on `adv_red_herring`, since only RPA gets it right.
+
+This demonstrates that cascading requires either: (a) better-calibrated confidence, or (b) a different escalation strategy (e.g., escalate to RPA alone rather than majority vote).
+
+### 5.7 Error Analysis
 
 **Counterfactual Replay (3 errors):**
 - `recursive_serialization`: predicted step 3 (GT=4). Confused the design decision (step 3) with the implementation fault (step 4).
