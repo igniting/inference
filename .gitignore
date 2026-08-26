@@ -8,3 +8,5 @@
 /benchmark_cache/
 /benchmark_results/
 __pycache__/
+/ext_val_log.txt
+/who_and_when_data/
