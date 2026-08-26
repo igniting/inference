@@ -5,3 +5,5 @@
 /.playwright-mcp/
 /*.png
 /critique.md
+/benchmark_cache/
+/benchmark_results/
