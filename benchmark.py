@@ -1199,6 +1199,180 @@ def print_cascade_report(all_results: list[BlameResult], traces: list[Trace]):
 
 
 # ============================================================
+# SELF-CONSISTENCY PROBING (Phase 3)
+# ============================================================
+
+def print_self_consistency_report(all_results: list[BlameResult], traces: list[Trace]):
+    print(f"\n  {'=' * 95}")
+    print("  SELF-CONSISTENCY PROBING")
+    print("  " + "=" * 95)
+    print("  Hypothesis: steps where the model's answer varies across runs are genuine decision points.")
+    print("  A method that's inconsistent across runs is less trustworthy than a stable one.\n")
+
+    methods = sorted(set(r.method for r in all_results))
+    run_ids = sorted(set(r.run_id for r in all_results))
+
+    if len(run_ids) < 2:
+        print("  (Requires Phase 2+ with multiple runs to analyze self-consistency)")
+        return
+
+    # Per-method: how often does prediction change across runs?
+    print(f"  {'METHOD':<25} {'Flip Rate':>10} {'Entropy':>9} {'Acc@Stable':>11} {'Acc@Flip':>10}")
+    print("  " + "-" * 70)
+
+    for method in methods:
+        stable_correct = 0
+        stable_total = 0
+        flip_correct = 0
+        flip_total = 0
+        entropies = []
+
+        for trace in traces:
+            sub = [r for r in all_results if r.method == method and r.trace_name == trace.task_name]
+            if len(sub) < 2:
+                continue
+            preds = [r.predicted_culprit for r in sub]
+            counts = Counter(preds)
+            total = len(preds)
+
+            # Shannon entropy of prediction distribution
+            ent = -sum((c/total) * math.log2(c/total) for c in counts.values() if c > 0)
+            entropies.append(ent)
+
+            majority = counts.most_common(1)[0][0]
+            is_stable = len(set(preds)) == 1
+
+            if is_stable:
+                stable_total += 1
+                stable_correct += int(preds[0] == trace.fault_step_id)
+            else:
+                flip_total += 1
+                flip_correct += int(majority == trace.fault_step_id)
+
+        flip_rate = flip_total / (stable_total + flip_total) if (stable_total + flip_total) else 0
+        avg_ent = sum(entropies) / len(entropies) if entropies else 0
+        acc_stable = stable_correct / stable_total if stable_total else float('nan')
+        acc_flip = flip_correct / flip_total if flip_total else float('nan')
+
+        s_str = f"{acc_stable:.0%}" if stable_total else "N/A"
+        f_str = f"{acc_flip:.0%}" if flip_total else "N/A"
+        print(f"  {method:<25} {flip_rate:>9.0%} {avg_ent:>8.3f} {s_str:>10} {f_str:>10}")
+
+    # Per-trace: which traces cause the most disagreement across runs?
+    print(f"\n  TRACES WITH HIGHEST PREDICTION VARIANCE ACROSS RUNS")
+    print("  " + "-" * 80)
+    trace_variances = []
+    for trace in traces:
+        sub = [r for r in all_results if r.trace_name == trace.task_name]
+        if not sub:
+            continue
+        method_flips = 0
+        method_count = 0
+        for method in methods:
+            msub = [r for r in sub if r.method == method]
+            if len(msub) < 2:
+                continue
+            method_count += 1
+            preds = [r.predicted_culprit for r in msub]
+            if len(set(preds)) > 1:
+                method_flips += 1
+        if method_count:
+            trace_variances.append((trace, method_flips / method_count))
+
+    trace_variances.sort(key=lambda x: -x[1])
+    for trace, var in trace_variances:
+        if var > 0:
+            tag = " [ADV]" if trace.is_adversarial else ""
+            print(f"    {trace.task_name:<24}{tag}  flip_rate={var:.0%}")
+            for method in methods:
+                msub = [r for r in all_results if r.method == method and r.trace_name == trace.task_name]
+                if len(msub) >= 2:
+                    preds = [r.predicted_culprit for r in msub]
+                    if len(set(preds)) > 1:
+                        correct_str = "v" if Counter(preds).most_common(1)[0][0] == trace.fault_step_id else "x"
+                        print(f"      {method:<25} preds={preds} majority={Counter(preds).most_common(1)[0][0]}{correct_str}")
+
+    if not any(v > 0 for _, v in trace_variances):
+        print("    All methods gave identical predictions across runs (perfect stability)")
+
+
+# ============================================================
+# PAPER-READY COMPARISON TABLE (Phase 3)
+# ============================================================
+
+def print_paper_table(all_results: list[BlameResult], traces: list[Trace]):
+    print(f"\n  {'=' * 95}")
+    print("  PAPER-READY COMPARISON TABLE")
+    print("  " + "=" * 95)
+
+    methods = sorted(set(r.method for r in all_results))
+    run_ids = sorted(set(r.run_id for r in all_results))
+    num_runs = len(run_ids)
+
+    print(f"\n  Table 1: Method Comparison (n={len(traces)} traces, {num_runs} run{'s' if num_runs>1 else ''})")
+    print(f"  {'Method':<25} {'Top-1':>7} {'Top-2':>7} {'MRR':>7} {'95% CI':>14} {'Stability':>10} {'Errors':>7}")
+    print("  " + "-" * 80)
+
+    for method in methods:
+        subset = [r for r in all_results if r.method == method]
+        s = compute_stats(subset)
+        if not s:
+            continue
+
+        # Stability: fraction of traces with identical predictions across all runs
+        if num_runs > 1:
+            stable = 0
+            total = 0
+            for trace in traces:
+                msub = [r for r in subset if r.trace_name == trace.task_name]
+                if len(msub) >= 2:
+                    total += 1
+                    if len(set(r.predicted_culprit for r in msub)) == 1:
+                        stable += 1
+            stability = f"{stable}/{total}" if total else "N/A"
+        else:
+            stability = "N/A"
+
+        errors = sum(1 for r in subset if not r.correct and r.run_id == 0)
+        print(f"  {method:<25} {s['top1_accuracy']:>6.0%} {s['top2_accuracy']:>6.0%} {s['mrr']:>6.3f} "
+              f"[{s['top1_ci_lo']:.0%}-{s['top1_ci_hi']:.0%}] {stability:>10} {errors:>6}")
+
+    # Error categorization
+    print(f"\n  Table 2: Error Categorization")
+    print(f"  {'Category':<25} {'Count':>7} {'Methods Affected':>50}")
+    print("  " + "-" * 85)
+
+    categories = defaultdict(lambda: {"count": 0, "methods": set(), "traces": set()})
+    for r in all_results:
+        if r.correct or r.run_id != 0:
+            continue
+        trace = next((t for t in traces if t.task_name == r.trace_name), None)
+        if not trace:
+            continue
+
+        if trace.is_adversarial and trace.adversarial_type == "red_herring":
+            cat = "surface-confusion"
+        elif trace.is_adversarial and trace.adversarial_type == "multi_fault":
+            cat = "multi-fault-collapse"
+        elif trace.is_adversarial and trace.adversarial_type == "omission":
+            cat = "omission-blindness"
+        elif abs(r.predicted_culprit - r.ground_truth) <= 1:
+            cat = "off-by-one"
+        elif r.predicted_culprit == -1:
+            cat = "api-failure"
+        else:
+            cat = "misattribution"
+
+        categories[cat]["count"] += 1
+        categories[cat]["methods"].add(r.method)
+        categories[cat]["traces"].add(r.trace_name)
+
+    for cat, info in sorted(categories.items(), key=lambda x: -x[1]["count"]):
+        methods_str = ", ".join(sorted(info["methods"]))
+        print(f"  {cat:<25} {info['count']:>6}  {methods_str}")
+
+
+# ============================================================
 # MAIN
 # ============================================================
 
@@ -1270,6 +1444,8 @@ async def run_benchmark(
 
     if phase >= 3:
         print_cascade_report(all_results, all_traces)
+        print_self_consistency_report(all_results, all_traces)
+        print_paper_table(all_results, all_traces)
 
 
 if __name__ == "__main__":
