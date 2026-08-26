@@ -62,7 +62,7 @@ MODELS = {
     },
 }
 
-RATE_LIMIT_RPM = 18
+RATE_LIMIT_RPM = 12
 RATE_LIMIT_DELAY = 60 / RATE_LIMIT_RPM
 
 CACHE_DIR = Path("./benchmark_cache")
@@ -504,7 +504,7 @@ async def call_openrouter(
     temperature: float = 0.1,
     use_json_mode: bool = True,
     run_id: int = 0,
-    retries: int = 4,
+    retries: int = 6,
 ) -> str:
     CACHE_DIR.mkdir(exist_ok=True)
     ck = cache_key(model_id, prompt, temperature, run_id)
@@ -541,13 +541,13 @@ async def call_openrouter(
             )
 
             if resp.status_code == 429:
-                wait = min(60, 2 ** (attempt + 2))
+                wait = min(90, 8 * (2 ** attempt))
                 print(f"    [429] waiting {wait}s...", end="", flush=True)
                 await asyncio.sleep(wait)
                 continue
 
             if resp.status_code in (502, 503, 504):
-                wait = 5 * (attempt + 1)
+                wait = 10 * (attempt + 1)
                 print(f"    [{resp.status_code}] retry in {wait}s...", end="", flush=True)
                 await asyncio.sleep(wait)
                 continue
@@ -559,7 +559,7 @@ async def call_openrouter(
                 err = data["error"]
                 err_msg = err.get("message", str(err)) if isinstance(err, dict) else str(err)
                 if "overload" in err_msg.lower() or "temporarily" in err_msg.lower():
-                    wait = 10 * (attempt + 1)
+                    wait = 15 * (attempt + 1)
                     print(f"    [overload] retry in {wait}s...", end="", flush=True)
                     await asyncio.sleep(wait)
                     continue
