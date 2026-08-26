@@ -566,6 +566,12 @@ async def call_openrouter(
                 raise ValueError(f"API error: {err_msg}")
 
             text = data["choices"][0]["message"]["content"]
+            if text is None:
+                if attempt < retries - 1:
+                    print(f"    [null content] retry...", end="", flush=True)
+                    await asyncio.sleep(5)
+                    continue
+                raise ValueError("API returned null content")
 
             with open(cache_path, "w") as f:
                 json.dump({"model": model_id, "response": text, "temperature": temperature}, f)
